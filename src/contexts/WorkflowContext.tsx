@@ -7,6 +7,7 @@ export interface WorkflowContextType {
   workflowPrompt: string | null;
   workflowStatus: "IDLE" | "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL";
   activeStatus: { title: string; subtitle?: string } | null;
+  finalAnswer: string | null;
   steps: { label: string; state: "todo" | "doing" | "done" }[];
   thinkingEvents: HermesEventItem[];
   discoveredCount: number;
@@ -130,6 +131,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     title: string;
     subtitle?: string;
   } | null>(null);
+  const [finalAnswer, setFinalAnswer] = useState<string | null>(null);
   const [steps, setSteps] = useState<
     { label: string; state: "todo" | "doing" | "done" }[]
   >([]);
@@ -211,6 +213,9 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
               title: "Completed",
               subtitle: "All qualified entities saved",
             });
+            if (payload.details?.finalAnswer || payload.stepName) {
+              setFinalAnswer(payload.details?.finalAnswer || payload.stepName);
+            }
             window.dispatchEvent(new Event("opportunitiesUpdated"));
             if (es) {
               es.close();
@@ -264,6 +269,9 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
                 title: "Completed",
                 subtitle: "All qualified entities saved",
               });
+              if (data.finalAnswer) {
+                setFinalAnswer(data.finalAnswer);
+              }
               window.dispatchEvent(new Event("opportunitiesUpdated"));
               if (es) {
                 es.close();
@@ -308,6 +316,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       title: "Initializing NOVA Autonomous Agent...",
       subtitle: "Starting reasoning loop",
     });
+    setFinalAnswer(null);
     setSteps([]);
     setThinkingEvents([]);
     setDiscoveredCount(0);
@@ -360,6 +369,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     setWorkflowPrompt(null);
     setWorkflowStatus("IDLE");
     setActiveStatus(null);
+    setFinalAnswer(null);
     setSteps([]);
     setThinkingEvents([]);
     setDiscoveredCount(0);
@@ -376,6 +386,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
         workflowPrompt,
         workflowStatus,
         activeStatus,
+        finalAnswer,
         steps,
         thinkingEvents,
         discoveredCount,

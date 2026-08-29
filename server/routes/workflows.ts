@@ -146,7 +146,17 @@ router.get("/:workflowId", requireAuth, async (req: any, res) => {
     });
 
     if (workflow) {
-      return res.json(workflow);
+      const finalEvent = workflow.events?.find(
+        (e: any) => e.type === "FINAL_ANSWER",
+      );
+      const finalAnswer =
+        (finalEvent?.data as any)?.answer ||
+        workflow.events?.find((e: any) => e.type === "NOVA_COMPLETED")?.type ||
+        null;
+      return res.json({
+        ...workflow,
+        finalAnswer,
+      });
     }
 
     // Check conversation next

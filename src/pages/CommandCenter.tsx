@@ -173,14 +173,28 @@ function ChatView({
   const [topLead, setTopLead] = useState<any>(null);
   const startedPromptRef = useRef<string | null>(null);
 
-  // Trigger background workflow start ONLY once per prompt, not on status reset
+  const finalAnswer = isHistory
+    ? workflowData.finalAnswer ||
+      (
+        workflowData.events?.find((e: any) => e.type === "FINAL_ANSWER")
+          ?.data as any
+      )?.answer ||
+      null
+    : globalWorkflow.finalAnswer;
+
+  // Trigger background workflow start ONLY if not already running or completed
   useEffect(() => {
     if (isHistory || !prompt) return;
+    if (
+      globalWorkflow.workflowStatus === "COMPLETED" ||
+      globalWorkflow.workflowStatus === "RUNNING"
+    )
+      return;
     if (startedPromptRef.current === prompt) return;
 
     startedPromptRef.current = prompt;
     globalWorkflow.startBackgroundWorkflow(prompt);
-  }, [isHistory, prompt]);
+  }, [isHistory, prompt, globalWorkflow.workflowStatus]);
 
   const [dbOppCount, setDbOppCount] = useState<number>(0);
 
@@ -303,7 +317,7 @@ function ChatView({
             />
           )}
         </NovaMessage>
-      ) : activeStatus ? (
+      ) : !completed && activeStatus ? (
         <NovaMessage role="nova">
           <NovaLiveActivity
             title={activeStatus.title}
@@ -317,6 +331,140 @@ function ChatView({
       {completed && (
         <NovaMessage role="nova">
           {(() => {
+            if (finalAnswer) {
+              return (
+                <div className="space-y-6">
+                  <FormattedChatMessage
+                    content={finalAnswer}
+                    onActionClick={(action) => {
+                      if (
+                        action === "prepare_outreach" ||
+                        action === "prepare_email"
+                      ) {
+                        navigate("/app/approvals");
+                      } else if (action === "view_products") {
+                        navigate("/app/products");
+                      } else if (action === "view_deals") {
+                        navigate("/app/deals");
+                      } else if (action === "discover_buyers") {
+                        onRunAgain?.(
+                          "Find potential B2B wholesale buyers across regional hubs",
+                        );
+                      }
+                    }}
+                  />
+
+                  {topLead && (
+                    <div className="rounded-[var(--radius-md)] border border-[var(--color-line)] bg-[var(--color-surface)] p-5 shadow-sm space-y-4">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-serif text-xl font-bold text-[var(--color-ink)]">
+                              {topLead.name ||
+                                topLead.companyName ||
+                                "Top B2B Buyer"}
+                            </span>
+                            <Badge tone="sage">
+                              {topLead.matchScore || 80}% MATCH
+                            </Badge>
+                            <Badge tone="neutral">QUALIFIED</Badge>
+                          </div>
+                          <p className="text-xs text-[var(--color-ink-soft)] mt-1 flex items-center gap-2">
+                            <span>
+                              📍 {topLead.location || topLead.city || "India"}
+                            </span>
+                            <span>•</span>
+                            <span>
+                              🏢{" "}
+                              {topLead.industry ||
+                                "Food & Agriculture Wholesale"}
+                            </span>
+                          </p>
+                        </div>
+
+                        {topLead.website && (
+                          <a
+                            href={
+                              topLead.website.startsWith("http")
+                                ? topLead.website
+                                : `https://${topLead.website}`
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-[var(--color-coral-ink)] hover:underline font-mono"
+                          >
+                            <Globe size={13} />
+                            Verified Website
+                            <ExternalLink size={11} />
+                          </a>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-3 rounded-[var(--radius-sm)] bg-[var(--color-bg-sunk)] p-3.5 text-xs">
+                        <div>
+                          <span className="text-[10px] font-mono text-[var(--color-ink-faint)] block uppercase tracking-wider">
+                            Target Product
+                          </span>
+                          <span className="font-bold text-[var(--color-ink)] font-serif text-sm">
+                            {topLead.productName || "Commercial Product"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-mono text-[var(--color-ink-faint)] block uppercase tracking-wider">
+                            Est. Deal Value
+                          </span>
+                          <span className="font-bold text-[var(--color-ink)] font-serif text-sm">
+                            {topLead.potentialImpact
+                              ? `₹${topLead.potentialImpact.toLocaleString("en-IN")}`
+                              : "₹14,00,000"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-mono text-[var(--color-ink-faint)] block uppercase tracking-wider">
+                            Est. Gross Profit
+                          </span>
+                          <span className="font-bold text-[var(--color-sage)] font-serif text-sm">
+                            {topLead.potentialGrossProfit
+                              ? `₹${topLead.potentialGrossProfit.toLocaleString("en-IN")}`
+                              : "₹1,75,000"}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="rounded-[var(--radius-sm)] bg-[var(--color-surface-2)] border border-[var(--color-line)] p-3.5">
+                        <div className="flex items-center gap-1.5 mb-1 text-xs label-mono text-[var(--color-ink-faint)]">
+                          <NovaMark size={13} />
+                          <span>Why NOVA identified this match</span>
+                        </div>
+                        <p className="text-xs leading-relaxed text-[var(--color-ink-soft)]">
+                          {topLead.reason ||
+                            topLead.description ||
+                            "Product profile and geographical commercial activity directly align with your wholesale offering."}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid gap-2 sm:grid-cols-2 pt-1">
+                    <Button
+                      onClick={() => navigate("/app/opportunities")}
+                      className="w-full"
+                    >
+                      View Opportunities & Pipeline
+                      <ArrowRight size={15} />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate("/app/deals")}
+                      className="w-full"
+                    >
+                      View Pipeline Deals
+                    </Button>
+                  </div>
+                </div>
+              );
+            }
+
             const promptLower = prompt.toLowerCase().trim();
             const conversationalKeywords = [
               "ok",
