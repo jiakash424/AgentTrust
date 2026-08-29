@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Wordmark, NovaMark } from "../components/brand";
 import { Button, StatusDot } from "../components/ui";
+import Footer from "../components/layout/Footer";
 
 const nav = [
   { label: "Product", href: "#product" },
@@ -381,14 +382,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-[var(--color-line)]">
-        <div className="max-w-6xl mx-auto px-5 lg:px-8 py-10 flex flex-wrap items-center justify-between gap-4">
-          <Wordmark size={22} />
-          <p className="text-[13px] text-[var(--color-ink-faint)]">
-            © 2026 AgentTrust · Demo experience
-          </p>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }
