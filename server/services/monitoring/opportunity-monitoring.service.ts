@@ -154,7 +154,7 @@ export class OpportunityMonitoringService {
         "OPPORTUNITY_MONITOR_PROGRESS",
         {
           runId: researchRun.id,
-          stepName: `Hermes researching new buyers for ${targetProduct} in ${city}`,
+          stepName: `NOVA researching new buyers for ${targetProduct} in ${city}`,
         },
       );
 
@@ -164,7 +164,7 @@ export class OpportunityMonitoringService {
         `wf_mon_${researchRun.id}`,
       );
 
-      // Hermes saves opportunities directly via create_opportunity MCP tool during research
+      // NOVA saves opportunities directly via create_opportunity MCP tool during research
       const candidateOpps: any[] = [];
       totalFound = candidateOpps.length;
 
@@ -187,7 +187,7 @@ export class OpportunityMonitoringService {
             aiInferences: candidate.verifiedFacts,
             productFitReason: candidate.whyRelevant,
             sources: (candidate.sourceUrls || []).map((url: string) => ({
-              sourceName: "Native Hermes",
+              sourceName: "NOVA Autonomous Agent",
               sourceUrl: url,
             })),
           },
@@ -270,7 +270,7 @@ export class OpportunityMonitoringService {
                   create: (candidate.sourceUrls || []).map((url: string) => ({
                     sourceType: "WEB",
                     sourceUrl: url,
-                    sourceName: "Native Hermes Autonomous Monitor",
+                    sourceName: "NOVA Autonomous Monitor",
                     verificationStatus: "VERIFIED",
                   })),
                 },

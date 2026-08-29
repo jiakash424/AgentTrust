@@ -235,7 +235,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     setWorkflowPrompt(prompt);
     setWorkflowStatus("RUNNING");
     setActiveStatus({
-      title: "Initializing Hermes Autonomous Agent...",
+      title: "Initializing NOVA Autonomous Agent...",
       subtitle: "Starting reasoning loop",
     });
     setSteps([]);

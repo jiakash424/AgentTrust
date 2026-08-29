@@ -448,7 +448,7 @@ function ChatView({
                 <div className="space-y-4">
                   <div>
                     <p className="font-medium text-[var(--color-ink)] font-serif text-xl">
-                      Inventory Commercial Analysis Completed by HERMES AI
+                      Inventory Commercial Analysis Completed by NOVA AI
                     </p>
                     <p className="mt-2 text-[var(--color-ink-soft)] leading-relaxed">
                       NOVA evaluated your registered catalog, stock
