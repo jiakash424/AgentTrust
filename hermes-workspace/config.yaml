@@ -1,0 +1,5 @@
+mcp_servers:
+  agenttrust:
+    command: "npx"
+    args: ["tsx", "../server/mcp/agenttrust-mcp-server.ts"]
+    transport: "stdio"

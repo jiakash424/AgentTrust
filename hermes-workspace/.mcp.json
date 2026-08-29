@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "agenttrust": {
+      "command": "npx",
+      "args": ["tsx", "../server/mcp/agenttrust-mcp-server.ts"]
+    }
+  }
+}
