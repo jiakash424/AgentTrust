@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0F172A"/>
+      <stop offset="100%" stop-color="#020617"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#E2E8F0"/>
+    </linearGradient>
+    <linearGradient id="gemGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="50%" stop-color="#06B6D4"/>
+      <stop offset="100%" stop-color="#3B82F6"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Container Squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)"/>
+  <rect x="4" y="4" width="504" height="504" rx="108" stroke="#1E293B" stroke-width="6" opacity="0.6"/>
+
+  <!-- Subtle Shield Perimeter -->
+  <path d="M256 76 L396 142 V254 C396 338 336 406 256 436 C176 406 116 338 116 254 V142 Z"
+        stroke="#334155" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+
+  <!-- "A" / "T" Monogram & Shield Core Geometry -->
+  <!-- Left Wing of "A" / Shield Crest -->
+  <path d="M256 100 L372 166 V240 L332 232 V184 L256 140 L180 184 V232 L140 240 V166 Z"
+        fill="url(#shieldGrad)"/>
+
+  <!-- "T" Crossbeam -->
+  <path d="M152 248 H360 C368 248 374 254 372 262 L360 300 H304 V394 L256 418 L208 394 V300 H152 L140 262 C138 254 144 248 152 248 Z"
+        fill="url(#shieldGrad)"/>
+
+  <!-- Inner Diamond Intel Core (NOVA Nexus) -->
+  <path d="M256 166 L292 208 L256 250 L220 208 Z" fill="url(#gemGrad)" filter="url(#glow)"/>
+  <circle cx="256" cy="208" r="4" fill="#FFFFFF"/>
+</svg>

@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <defs>
+    <linearGradient id="lightGem" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#059669"/>
+      <stop offset="100%" stop-color="#0891B2"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="#F8FAFC"/>
+  <rect x="4" y="4" width="504" height="504" rx="108" stroke="#E2E8F0" stroke-width="6"/>
+
+  <path d="M256 76 L396 142 V254 C396 338 336 406 256 436 C176 406 116 338 116 254 V142 Z"
+        stroke="#CBD5E1" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" opacity="0.6"/>
+
+  <path d="M256 100 L372 166 V240 L332 232 V184 L256 140 L180 184 V232 L140 240 V166 Z"
+        fill="#0F172A"/>
+
+  <path d="M152 248 H360 C368 248 374 254 372 262 L360 300 H304 V394 L256 418 L208 394 V300 H152 L140 262 C138 254 144 248 152 248 Z"
+        fill="#0F172A"/>
+
+  <path d="M256 166 L292 208 L256 250 L220 208 Z" fill="url(#lightGem)"/>
+  <circle cx="256" cy="208" r="4" fill="#FFFFFF"/>
+</svg>
