@@ -99,13 +99,29 @@ router.get("/:workflowId/stream", async (req, res) => {
   }
 
   res.setHeader("Content-Type", "text/event-stream");
-  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no");
   res.flushHeaders?.();
 
+  // Send immediate SSE comment to flush reverse-proxy buffers
+  res.write(": connected\n\n");
+
+  // Keep-alive heartbeat every 10s
+  const heartbeatTimer = setInterval(() => {
+    try {
+      res.write(": heartbeat\n\n");
+    } catch {
+      clearInterval(heartbeatTimer);
+    }
+  }, 10000);
+
   // Register client stream with central WorkflowEventManager
   workflowEvents.registerStream(workflowId, res);
+
+  res.on("close", () => {
+    clearInterval(heartbeatTimer);
+  });
 
   // Instantly send current state if already completed
   try {

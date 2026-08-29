@@ -137,7 +137,7 @@ router.get("/:workflowId", requireAuth, async (req: any, res) => {
 
     // Check aiWorkflow first
     const workflow = await prisma.aiWorkflow.findFirst({
-      where: { id: workflowId, workspaceId },
+      where: workspaceId ? { id: workflowId, workspaceId } : { id: workflowId },
       include: {
         events: {
           orderBy: { createdAt: "asc" },
@@ -151,7 +151,7 @@ router.get("/:workflowId", requireAuth, async (req: any, res) => {
 
     // Check conversation next
     const conv = await prisma.conversation.findFirst({
-      where: { id: workflowId, workspaceId },
+      where: workspaceId ? { id: workflowId, workspaceId } : { id: workflowId },
       include: {
         messages: {
           orderBy: { createdAt: "asc" },

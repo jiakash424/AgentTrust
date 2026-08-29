@@ -143,7 +143,7 @@ export class HermesSessionManager {
     // Emit SSE: starting
     workflowEvents.emitProgress({
       workflowId: taskId,
-      stage: "HERMES_STARTED",
+      stage: "NOVA_STARTED",
       stepName: "Sending message to NOVA agent...",
       completedSteps: 1,
       totalSteps: 5,
@@ -204,36 +204,36 @@ export class HermesSessionManager {
           if (!trimmed) continue;
 
           // Detect tool usage and activity from Hermes output
-          let stage = "HERMES_THINKING";
+          let stage = "NOVA_THINKING";
           let stepName = trimmed.substring(0, 150);
 
           const lower = trimmed.toLowerCase();
           if (lower.includes("get_products") || lower.includes("get_product")) {
-            stage = "HERMES_TOOL_CALL";
+            stage = "NOVA_TOOL_CALL";
             stepName = "Checking product catalog...";
           } else if (
             lower.includes("get_opportunities") ||
             lower.includes("get_opportunity")
           ) {
-            stage = "HERMES_TOOL_CALL";
+            stage = "NOVA_TOOL_CALL";
             stepName = "Reviewing opportunities...";
           } else if (
             lower.includes("get_leads") ||
             lower.includes("get_deals")
           ) {
-            stage = "HERMES_TOOL_CALL";
+            stage = "NOVA_TOOL_CALL";
             stepName = "Checking leads and deals...";
           } else if (lower.includes("get_business_context")) {
-            stage = "HERMES_TOOL_CALL";
+            stage = "NOVA_TOOL_CALL";
             stepName = "Loading business context...";
           } else if (lower.includes("get_sales_metrics")) {
-            stage = "HERMES_TOOL_CALL";
+            stage = "NOVA_TOOL_CALL";
             stepName = "Analyzing sales metrics...";
           } else if (lower.includes("create_opportunity")) {
-            stage = "HERMES_WRITING";
+            stage = "NOVA_WRITING";
             stepName = "Saving new opportunity...";
           } else if (lower.includes("create_lead")) {
-            stage = "HERMES_WRITING";
+            stage = "NOVA_WRITING";
             stepName = "Creating new lead...";
           } else if (
             lower.includes("search") ||
@@ -241,14 +241,14 @@ export class HermesSessionManager {
             lower.includes("tavily") ||
             lower.includes("http")
           ) {
-            stage = "HERMES_RESEARCHING";
+            stage = "NOVA_RESEARCHING";
             stepName = "Researching the web...";
           } else if (
             lower.includes("read") ||
             lower.includes("page") ||
             lower.includes("browsing")
           ) {
-            stage = "HERMES_BROWSING";
+            stage = "NOVA_BROWSING";
             stepName = "Reading web content...";
           }
 
@@ -293,7 +293,7 @@ export class HermesSessionManager {
 
           workflowEvents.emitProgress({
             workflowId: taskId,
-            stage: "HERMES_FAILED",
+            stage: "NOVA_FAILED",
             stepName: "Agent process failed",
             completedSteps: 0,
             totalSteps: 5,
@@ -318,7 +318,7 @@ export class HermesSessionManager {
 
         workflowEvents.emitProgress({
           workflowId: taskId,
-          stage: "HERMES_COMPLETED",
+          stage: "NOVA_COMPLETED",
           stepName: "NOVA response ready",
           completedSteps: 5,
           totalSteps: 5,

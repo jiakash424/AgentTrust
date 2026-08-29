@@ -5,8 +5,8 @@ import { logInfo, logError } from "../utils/logger";
 
 export class HermesBuyerResearchAgentService {
   /**
-   * Central Hermes Discovery & Research Execution Path.
-   * Dispatches the user's buyer research command to a dedicated Hermes session.
+   * Central NOVA Discovery & Research Execution Path.
+   * Dispatches the user's buyer research command to a dedicated NOVA agent session.
    * Emits progressive multi-step status events so the UI live console
    * shows real step progression (Step 1 -> Step 2 -> Step 3 -> Step 4 -> Step 5).
    */
@@ -15,7 +15,7 @@ export class HermesBuyerResearchAgentService {
     userCommand: string,
     workflowId?: string,
   ): Promise<{ text: string; sessionName: string }> {
-    const wfId = workflowId || `wf_hermes_${Date.now()}`;
+    const wfId = workflowId || `wf_nova_${Date.now()}`;
 
     // Helper to emit typed progress stages
     const emitStage = (
@@ -36,18 +36,18 @@ export class HermesBuyerResearchAgentService {
 
     // Step 1: Initialize & Catalog Inspection
     emitStage(
-      "HERMES_STARTED",
+      "NOVA_STARTED",
       "Initializing NOVA Autonomous Agent & inspecting catalog...",
       1,
     );
 
-    // Timed progressive stage emittors during active Hermes reasoning
+    // Timed progressive stage emittors during active reasoning
     const intervalTimers: NodeJS.Timeout[] = [];
 
     intervalTimers.push(
       setTimeout(() => {
         emitStage(
-          "HERMES_RESEARCHING",
+          "NOVA_RESEARCHING",
           "Searching commercial buyer demand & wholesale registries...",
           2,
         );
@@ -57,7 +57,7 @@ export class HermesBuyerResearchAgentService {
     intervalTimers.push(
       setTimeout(() => {
         emitStage(
-          "HERMES_VERIFYING",
+          "NOVA_VERIFYING",
           "Verifying company details, locations, and procurement signals...",
           3,
         );
@@ -67,7 +67,7 @@ export class HermesBuyerResearchAgentService {
     intervalTimers.push(
       setTimeout(() => {
         emitStage(
-          "HERMES_ANALYZING",
+          "NOVA_ANALYZING",
           "Evaluating commercial fit and calculating opportunity match scores...",
           4,
         );
@@ -76,7 +76,7 @@ export class HermesBuyerResearchAgentService {
 
     try {
       logInfo(
-        `[HermesBuyerResearchAgent] Dispatching to native Hermes session for workspace ${workspaceId}...`,
+        `[NovaBuyerResearchAgent] Dispatching to native agent session for workspace ${workspaceId}...`,
       );
 
       // Use a dedicated background session for research tasks
@@ -108,15 +108,24 @@ export class HermesBuyerResearchAgentService {
 
       // Step 5: Final Completed Stage
       emitStage(
-        "HERMES_COMPLETED",
+        "NOVA_COMPLETED",
         "All qualified opportunities saved & commercial intelligence finalized",
         5,
       );
 
+      workflowEvents.emitProgress({
+        workflowId: wfId,
+        stage: "workflow_completed",
+        stepName: "Analysis & commercial intelligence finalized",
+        completedSteps: 5,
+        totalSteps: 5,
+        timestamp: new Date().toISOString(),
+      });
+
       return result;
     } catch (err: any) {
       intervalTimers.forEach((t) => clearTimeout(t));
-      logError(`[HermesBuyerResearchAgent] Workflow ${wfId} failed:`, err);
+      logError(`[NovaBuyerResearchAgent] Workflow ${wfId} failed:`, err);
 
       await prisma.aiWorkflow
         .upsert({
@@ -140,8 +149,18 @@ export class HermesBuyerResearchAgentService {
 
       workflowEvents.emitProgress({
         workflowId: wfId,
-        stage: "HERMES_FAILED",
+        stage: "NOVA_FAILED",
         stepName: `Research failed: ${err.message}`,
+        completedSteps: 5,
+        totalSteps: 5,
+        details: { error: err.message },
+        timestamp: new Date().toISOString(),
+      });
+
+      workflowEvents.emitProgress({
+        workflowId: wfId,
+        stage: "workflow_failed",
+        stepName: "Workflow execution failed",
         completedSteps: 5,
         totalSteps: 5,
         details: { error: err.message },

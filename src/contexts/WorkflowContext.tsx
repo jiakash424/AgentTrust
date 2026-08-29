@@ -1,20 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useAuth } from "./AuthContext";
-import { fetchApi } from "../lib/api";
 import { HermesEventItem } from "../nova/AgentThinkingConsole";
 
-interface WorkflowStep {
-  label: string;
-  state: "active" | "done";
-}
-
-interface WorkflowContextType {
+export interface WorkflowContextType {
   activeWorkflowId: string | null;
   workflowPrompt: string | null;
-  workflowStatus:
-    "IDLE" | "RUNNING" | "COMPLETED" | "PARTIAL" | "RATE_LIMITED" | "FAILED";
+  workflowStatus: "IDLE" | "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL";
   activeStatus: { title: string; subtitle?: string } | null;
-  steps: WorkflowStep[];
+  steps: { label: string; state: "todo" | "doing" | "done" }[];
   thinkingEvents: HermesEventItem[];
   discoveredCount: number;
   qualifiedCount: number;
@@ -32,33 +25,69 @@ const stepMap: Record<string, { title: string; subtitle?: string }> = {
     title: "Starting NOVA Autonomous Agent",
     subtitle: "Initializing agent process",
   },
+  NOVA_STARTED: {
+    title: "Starting NOVA Autonomous Agent",
+    subtitle: "Spawning process",
+  },
   HERMES_STARTED: {
     title: "Starting NOVA Autonomous Agent",
     subtitle: "Spawning process",
+  },
+  NOVA_THINKING: {
+    title: "NOVA is working",
+    subtitle: "Autonomous reasoning",
   },
   HERMES_THINKING: {
     title: "NOVA is working",
     subtitle: "Autonomous reasoning",
   },
+  NOVA_RESEARCHING: {
+    title: "Research in progress",
+    subtitle: "Searching public web & business directories",
+  },
   HERMES_RESEARCHING: {
     title: "Research in progress",
     subtitle: "Searching public web & business directories",
+  },
+  NOVA_BROWSING: {
+    title: "Inspecting web pages",
+    subtitle: "Reading candidate evidence",
   },
   HERMES_BROWSING: {
     title: "Inspecting web pages",
     subtitle: "Reading candidate evidence",
   },
+  NOVA_VERIFYING: {
+    title: "Verifying contact details & location",
+    subtitle: "Evidence verification",
+  },
   HERMES_VERIFYING: {
     title: "Verifying contact details & location",
     subtitle: "Evidence verification",
+  },
+  NOVA_ANALYZING: {
+    title: "Processing results",
+    subtitle: "Evaluating buyer fit",
   },
   HERMES_ANALYZING: {
     title: "Processing results",
     subtitle: "Evaluating buyer fit",
   },
+  NOVA_TOOL_CALL: {
+    title: "Executing tool",
+    subtitle: "Interacting with system",
+  },
+  NOVA_WRITING: {
+    title: "Saving records",
+    subtitle: "Persisting opportunities and leads",
+  },
   saving_opportunities: {
     title: "Saving opportunities",
     subtitle: "Database synchronization",
+  },
+  NOVA_COMPLETED: {
+    title: "Completed",
+    subtitle: "All qualified entities saved",
   },
   HERMES_COMPLETED: {
     title: "Completed",
@@ -67,6 +96,10 @@ const stepMap: Record<string, { title: string; subtitle?: string }> = {
   workflow_completed: {
     title: "Completed",
     subtitle: "All qualified entities saved",
+  },
+  NOVA_FAILED: {
+    title: "Failed",
+    subtitle: "Execution encountered an error",
   },
   HERMES_FAILED: {
     title: "Failed",
@@ -91,13 +124,15 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       : null,
   );
   const [workflowStatus, setWorkflowStatus] = useState<
-    "IDLE" | "RUNNING" | "COMPLETED" | "PARTIAL" | "RATE_LIMITED" | "FAILED"
+    "IDLE" | "RUNNING" | "COMPLETED" | "FAILED" | "PARTIAL"
   >("IDLE");
   const [activeStatus, setActiveStatus] = useState<{
     title: string;
     subtitle?: string;
   } | null>(null);
-  const [steps, setSteps] = useState<WorkflowStep[]>([]);
+  const [steps, setSteps] = useState<
+    { label: string; state: "todo" | "doing" | "done" }[]
+  >([]);
   const [thinkingEvents, setThinkingEvents] = useState<HermesEventItem[]>([]);
   const [discoveredCount, setDiscoveredCount] = useState(0);
   const [qualifiedCount, setQualifiedCount] = useState(0);
@@ -114,7 +149,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     else localStorage.removeItem("nova_active_wf_prompt");
   }, [activeWorkflowId, workflowPrompt]);
 
-  // Maintain EventSource in background across page navigation
+  // Maintain EventSource & Polling in background across page navigation
   useEffect(() => {
     if (!activeWorkflowId || workflowStatus !== "RUNNING") return;
 
@@ -124,6 +159,8 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
         ? localStorage.getItem("agenttrust_unique_client_token") || "dev_tok"
         : "dev_tok");
     let es: EventSource | null = null;
+    let pollInterval: NodeJS.Timeout | null = null;
+
     try {
       es = new EventSource(
         `/api/lead-discovery/${activeWorkflowId}/stream?token=${token}`,
@@ -144,7 +181,9 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
           if (stage) {
             const evtItem: HermesEventItem = {
               id: `${stage}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-              type: (stage.startsWith("HERMES_") ? stage : "THINKING") as any,
+              type: (stage.startsWith("NOVA_") || stage.startsWith("HERMES_")
+                ? stage
+                : "THINKING") as any,
               step: payload.completedSteps || 1,
               thought: stepName,
               observableAction: stepName,
@@ -162,6 +201,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
           }
 
           if (
+            stage === "NOVA_COMPLETED" ||
             stage === "HERMES_COMPLETED" ||
             stage === "workflow_completed" ||
             stage === "FINAL"
@@ -172,10 +212,17 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
               subtitle: "All qualified entities saved",
             });
             window.dispatchEvent(new Event("opportunitiesUpdated"));
-            if (es) es.close();
+            if (es) {
+              es.close();
+              es = null;
+            }
           }
 
-          if (stage === "HERMES_FAILED" || stage === "workflow_failed") {
+          if (
+            stage === "NOVA_FAILED" ||
+            stage === "HERMES_FAILED" ||
+            stage === "workflow_failed"
+          ) {
             setWorkflowStatus("FAILED");
             setActiveStatus({ title: "Failed", subtitle: "Execution error" });
             setErrorMessage(
@@ -183,7 +230,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
                 payload.error ||
                 "Workflow execution failed",
             );
-            if (es) es.close();
+            if (es) {
+              es.close();
+              es = null;
+            }
           }
         } catch (err) {
           console.warn("[WorkflowContext] SSE message parse error:", err);
@@ -195,6 +245,10 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
           es.close();
           es = null;
         }
+      };
+
+      // Resilient background polling fallback every 2.5 seconds
+      pollInterval = setInterval(async () => {
         try {
           const res = await fetch(`/api/workflows/${activeWorkflowId}`, {
             headers: {
@@ -206,19 +260,35 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
             const data = await res.json();
             if (data.status === "COMPLETED") {
               setWorkflowStatus("COMPLETED");
+              setActiveStatus({
+                title: "Completed",
+                subtitle: "All qualified entities saved",
+              });
               window.dispatchEvent(new Event("opportunitiesUpdated"));
+              if (es) {
+                es.close();
+                es = null;
+              }
+              if (pollInterval) clearInterval(pollInterval);
             } else if (data.status === "FAILED") {
               setWorkflowStatus("FAILED");
+              setActiveStatus({ title: "Failed", subtitle: "Execution error" });
               setErrorMessage(data.errorMessage || "Workflow execution failed");
+              if (es) {
+                es.close();
+                es = null;
+              }
+              if (pollInterval) clearInterval(pollInterval);
             }
           }
         } catch (e) {}
-      };
+      }, 2500);
     } catch (err: any) {
       console.error("[WorkflowContext] EventSource error:", err);
     }
 
     return () => {
+      if (pollInterval) clearInterval(pollInterval);
       if (es) {
         es.close();
         es = null;
@@ -265,16 +335,22 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || "Failed to start workflow");
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(
+          errJson.error || `Server responded with ${res.status}`,
+        );
       }
 
       const data = await res.json();
-      setActiveWorkflowId(data.workflowId);
-      return data.workflowId;
+      if (data.workflowId) {
+        setActiveWorkflowId(data.workflowId);
+        return data.workflowId;
+      }
+      return null;
     } catch (err: any) {
+      console.error("[startBackgroundWorkflow] Error:", err);
       setWorkflowStatus("FAILED");
-      setErrorMessage(err.message || "Failed to start workflow");
+      setErrorMessage(err.message);
       return null;
     }
   };
@@ -291,7 +367,6 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
     setErrorMessage(null);
     localStorage.removeItem("nova_active_wf_id");
     localStorage.removeItem("nova_active_wf_prompt");
-    localStorage.removeItem("nova_history_wf_id");
   };
 
   return (

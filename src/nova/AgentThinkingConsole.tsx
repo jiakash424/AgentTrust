@@ -1,8 +1,7 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Brain,
-  Wrench,
   Database,
   Eye,
   CheckCircle2,
@@ -11,7 +10,7 @@ import {
   Sparkles,
   Loader2,
   Terminal,
-  Layers,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "../lib/cn";
 
@@ -21,12 +20,26 @@ export type HermesEventType =
   | "TOOL_RESULT"
   | "OBSERVATION"
   | "FINAL"
+  | "NOVA_STARTED"
+  | "NOVA_THINKING"
+  | "NOVA_RESEARCHING"
+  | "NOVA_BROWSING"
+  | "NOVA_VERIFYING"
+  | "NOVA_ANALYZING"
+  | "NOVA_TOOL_CALL"
+  | "NOVA_TOOL_RESULT"
+  | "NOVA_WRITING"
+  | "NOVA_COMPLETED"
+  | "NOVA_FAILED"
   | "HERMES_STARTED"
   | "HERMES_THINKING"
   | "HERMES_RESEARCHING"
   | "HERMES_BROWSING"
   | "HERMES_VERIFYING"
   | "HERMES_ANALYZING"
+  | "HERMES_TOOL_CALL"
+  | "HERMES_TOOL_RESULT"
+  | "HERMES_WRITING"
   | "HERMES_COMPLETED"
   | "HERMES_FAILED";
 
@@ -42,6 +55,50 @@ export interface HermesEventItem {
   observation?: string;
   finalAnswer?: string;
   timestamp: string;
+}
+
+function formatEventType(type: string): string {
+  switch (type) {
+    case "NOVA_STARTED":
+    case "HERMES_STARTED":
+      return "INITIALIZING";
+    case "NOVA_THINKING":
+    case "HERMES_THINKING":
+    case "THINKING":
+      return "THINKING";
+    case "NOVA_RESEARCHING":
+    case "HERMES_RESEARCHING":
+      return "RESEARCHING";
+    case "NOVA_BROWSING":
+    case "HERMES_BROWSING":
+      return "BROWSING";
+    case "NOVA_VERIFYING":
+    case "HERMES_VERIFYING":
+      return "VERIFYING";
+    case "NOVA_ANALYZING":
+    case "HERMES_ANALYZING":
+      return "ANALYZING";
+    case "NOVA_TOOL_CALL":
+    case "HERMES_TOOL_CALL":
+    case "TOOL_CALL":
+      return "TOOL CALL";
+    case "NOVA_TOOL_RESULT":
+    case "HERMES_TOOL_RESULT":
+    case "TOOL_RESULT":
+      return "TOOL RESULT";
+    case "NOVA_WRITING":
+    case "HERMES_WRITING":
+      return "SAVING";
+    case "NOVA_COMPLETED":
+    case "HERMES_COMPLETED":
+    case "FINAL":
+      return "COMPLETED";
+    case "NOVA_FAILED":
+    case "HERMES_FAILED":
+      return "FAILED";
+    default:
+      return type.replace(/^(NOVA_|HERMES_)/, "").replace(/_/g, " ");
+  }
 }
 
 export function AgentThinkingConsole({
@@ -131,6 +188,22 @@ export function AgentThinkingConsole({
               </div>
             ) : (
               events.map((evt, idx) => {
+                const isFinal =
+                  evt.type === "FINAL" ||
+                  evt.type === "NOVA_COMPLETED" ||
+                  evt.type === "HERMES_COMPLETED";
+                const isFailed =
+                  evt.type === "NOVA_FAILED" || evt.type === "HERMES_FAILED";
+                const isTool =
+                  evt.type === "TOOL_CALL" ||
+                  evt.type === "NOVA_TOOL_CALL" ||
+                  evt.type === "HERMES_TOOL_CALL";
+                const isToolResult =
+                  evt.type === "TOOL_RESULT" ||
+                  evt.type === "NOVA_TOOL_RESULT" ||
+                  evt.type === "HERMES_TOOL_RESULT";
+                const isObservation = evt.type === "OBSERVATION";
+
                 return (
                   <motion.div
                     key={evt.id || `${evt.type}-${idx}-${evt.timestamp}`}
@@ -139,29 +212,33 @@ export function AgentThinkingConsole({
                     transition={{ duration: 0.2 }}
                     className={cn(
                       "relative pl-6 pb-2.5 group border-l-2",
-                      evt.type === "THINKING" && "border-indigo-500/50",
-                      evt.type === "TOOL_CALL" && "border-amber-500/50",
-                      evt.type === "TOOL_RESULT" && "border-blue-500/50",
-                      evt.type === "OBSERVATION" && "border-purple-500/50",
-                      evt.type === "FINAL" && "border-emerald-500/50",
+                      isFinal && "border-emerald-500/50",
+                      isFailed && "border-rose-500/50",
+                      isTool && "border-amber-500/50",
+                      isToolResult && "border-blue-500/50",
+                      isObservation && "border-purple-500/50",
+                      !isFinal &&
+                        !isFailed &&
+                        !isTool &&
+                        !isToolResult &&
+                        !isObservation &&
+                        "border-indigo-500/50",
                     )}
                   >
                     {/* Node Dot Icon */}
                     <span className="absolute -left-[9px] top-0 flex h-4 w-4 items-center justify-center rounded-full bg-[var(--color-surface)] border border-[var(--color-line)] shadow-sm">
-                      {evt.type === "THINKING" && (
-                        <Brain size={10} className="text-indigo-500" />
-                      )}
-                      {evt.type === "TOOL_CALL" && (
-                        <Terminal size={10} className="text-amber-500" />
-                      )}
-                      {evt.type === "TOOL_RESULT" && (
-                        <Database size={10} className="text-blue-500" />
-                      )}
-                      {evt.type === "OBSERVATION" && (
-                        <Eye size={10} className="text-purple-500" />
-                      )}
-                      {evt.type === "FINAL" && (
+                      {isFinal ? (
                         <CheckCircle2 size={10} className="text-emerald-500" />
+                      ) : isFailed ? (
+                        <AlertCircle size={10} className="text-rose-500" />
+                      ) : isTool ? (
+                        <Terminal size={10} className="text-amber-500" />
+                      ) : isToolResult ? (
+                        <Database size={10} className="text-blue-500" />
+                      ) : isObservation ? (
+                        <Eye size={10} className="text-purple-500" />
+                      ) : (
+                        <Brain size={10} className="text-indigo-500" />
                       )}
                     </span>
 
@@ -171,19 +248,25 @@ export function AgentThinkingConsole({
                         <span
                           className={cn(
                             "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide",
-                            evt.type === "THINKING" &&
-                              "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
-                            evt.type === "TOOL_CALL" &&
-                              "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
-                            evt.type === "TOOL_RESULT" &&
-                              "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20",
-                            evt.type === "OBSERVATION" &&
-                              "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20",
-                            evt.type === "FINAL" &&
+                            isFinal &&
                               "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20",
+                            isFailed &&
+                              "bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20",
+                            isTool &&
+                              "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20",
+                            isToolResult &&
+                              "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20",
+                            isObservation &&
+                              "bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20",
+                            !isFinal &&
+                              !isFailed &&
+                              !isTool &&
+                              !isToolResult &&
+                              !isObservation &&
+                              "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20",
                           )}
                         >
-                          Step {evt.step} · {evt.type}
+                          Step {evt.step} · {formatEventType(evt.type)}
                         </span>
 
                         {evt.toolName && (
@@ -218,26 +301,38 @@ export function AgentThinkingConsole({
                         </div>
                       )}
 
-                      {evt.toolArgs && Object.keys(evt.toolArgs).length > 0 && (
-                        <div className="bg-slate-900 text-slate-200 p-2 rounded-md font-mono text-[11px] overflow-x-auto">
-                          <span className="text-amber-400">args:</span>{" "}
-                          {JSON.stringify(evt.toolArgs)}
+                      {/* Tool Arguments View */}
+                      {evt.toolArgs && (
+                        <div className="bg-[var(--color-surface-2)]/50 p-2.5 rounded-lg border border-[var(--color-line)] space-y-1">
+                          <div className="text-[10px] font-mono font-bold text-[var(--color-ink-faint)] uppercase">
+                            Tool Arguments
+                          </div>
+                          <pre className="font-mono text-[11px] text-[var(--color-ink-soft)] overflow-x-auto whitespace-pre-wrap">
+                            {JSON.stringify(evt.toolArgs, null, 2)}
+                          </pre>
                         </div>
                       )}
 
+                      {/* Tool Result / Observation */}
+                      {evt.observation && (
+                        <div className="bg-emerald-500/5 p-2.5 rounded-lg border border-emerald-500/20 space-y-1">
+                          <div className="text-[10px] font-mono font-bold text-emerald-600 dark:text-emerald-400 uppercase">
+                            Observation
+                          </div>
+                          <p className="text-emerald-950 dark:text-emerald-200 text-xs leading-relaxed">
+                            {evt.observation}
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Step Execution Summary */}
                       {evt.summary && (
-                        <div className="bg-[var(--color-surface-2)] p-2 rounded-md text-[var(--color-ink)] font-mono text-[12px] border border-[var(--color-line)]">
-                          <span className="text-[var(--color-ink-faint)] block uppercase text-[10px] mb-0.5">
+                        <div className="text-xs text-[var(--color-ink-soft)] font-sans">
+                          <span className="font-semibold text-[var(--color-ink)]">
                             Execution Summary
-                          </span>
+                          </span>{" "}
                           {evt.summary}
                         </div>
-                      )}
-
-                      {evt.observation && (
-                        <p className="text-[var(--color-ink-soft)] text-xs font-mono bg-purple-500/5 p-2 rounded-md border border-purple-500/20">
-                          📍 {evt.observation}
-                        </p>
                       )}
                     </div>
                   </motion.div>
