@@ -1,0 +1,808 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum WorkspaceRole {
+  OWNER
+  MEMBER
+  VIEWER
+}
+
+enum EmailConnectionStatus {
+  CONNECTED
+  EXPIRED
+  REVOKED
+  DISCONNECTED
+  ERROR
+}
+
+enum OutreachStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  SENDING
+  SENT
+  REJECTED
+}
+
+enum ThreadStatus {
+  ACTIVE
+  ARCHIVED
+  IGNORED
+}
+
+model User {
+  id        String   @id // Maps to Supabase auth.users.id
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+
+  memberships WorkspaceMember[]
+  connections EmailConnection[]
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid())
+  workspaceId String
+  userId      String
+  role        WorkspaceRole @default(OWNER)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id])
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@unique([workspaceId, userId])
+}
+
+model OAuthState {
+  id           String   @id @default(uuid())
+  state        String   @unique
+  codeVerifier String?
+  userId       String
+  workspaceId  String
+  createdAt    DateTime @default(now())
+  expiresAt    DateTime
+}
+
+model EmailConnection {
+  id                    String                @id @default(uuid())
+  workspaceId           String
+  userId                String
+  provider              String                @default("GMAIL_SMTP")
+  emailAddress          String
+  encryptedSmtpPassword String?
+  smtpHost              String?               @default("smtp.gmail.com")
+  smtpPort              Int?                  @default(465)
+  smtpSecure            Boolean?              @default(true)
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  encryptionIv          String?
+  encryptionTag         String?
+  tokenExpiry           DateTime?
+  scopes                String?               @default("")
+  status                EmailConnectionStatus @default(CONNECTED)
+
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id])
+  user             User              @relation(fields: [userId], references: [id])
+  outreachMessages OutreachMessage[]
+  threadSyncs      ThreadSync[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OutreachMessage {
+  id                    String         @id @default(uuid())
+  workspaceId           String
+  leadId                String?
+  opportunityId         String?
+  dealId                String?
+  conversationId        String?
+  emailConnectionId     String?
+  gmailMessageId        String?
+  gmailThreadId         String?
+  subject               String
+  body                  String
+  personalizationReason String?
+  status                OutreachStatus @default(DRAFT)
+
+  // Audit Trail
+  approvedByUserId String?
+  approvedAt       DateTime?
+  messageHash      String?
+  sentAt           DateTime?
+
+  workspace       Workspace        @relation(fields: [workspaceId], references: [id])
+  lead            Lead?            @relation(fields: [leadId], references: [id])
+  opportunity     Opportunity?     @relation(fields: [opportunityId], references: [id])
+  deal            Deal?            @relation(fields: [dealId], references: [id])
+  conversation    Conversation?    @relation(fields: [conversationId], references: [id])
+  emailConnection EmailConnection? @relation(fields: [emailConnectionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ThreadSync {
+  id                String       @id @default(uuid())
+  workspaceId       String
+  emailConnectionId String
+  gmailThreadId     String
+  lastSyncedAt      DateTime     @default(now())
+  status            ThreadStatus @default(ACTIVE)
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id])
+  emailConnection EmailConnection @relation(fields: [emailConnectionId], references: [id])
+
+  @@unique([workspaceId, gmailThreadId])
+}
+
+model Workspace {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members          WorkspaceMember[]
+  emailConnections EmailConnection[]
+  outreachMessages OutreachMessage[]
+  threadSyncs      ThreadSync[]
+
+  products       Product[]
+  inventoryItems InventoryItem[]
+  leads          Lead[]
+  workflows      AiWorkflow[]
+  opportunities  Opportunity[]
+  deals          Deal[]
+
+  opportunityMonitor       OpportunityMonitor?
+  opportunityResearchRuns  OpportunityResearchRun[]
+  opportunityNotifications OpportunityNotification[]
+
+  conversations  Conversation[]
+  proposals      Proposal[]
+  quotations     Quotation[]
+  followUpTasks  FollowUpTask[]
+  dealActivities DealActivity[]
+
+  businessProfile BusinessProfile?
+
+  whatsAppConnections WhatsAppConnection[]
+  whatsAppMessages    WhatsAppMessage[]
+  whatsAppOptOuts     WhatsAppOptOut[]
+  whatsAppCampaigns   WhatsAppCampaign[]
+  priceObservations   PriceObservation[]
+}
+
+model WhatsAppConnection {
+  id                 String    @id @default(uuid())
+  workspaceId        String
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  phoneNumberId      String?
+  wabaId             String?
+  displayPhoneNumber String?
+  encryptedToken     String?
+  webhookSecret      String?
+  status             String    @default("DISCONNECTED") // CONNECTED, DISCONNECTED, ERROR, DEMO_MODE
+  mode               String    @default("OFFICIAL_META") // OFFICIAL_META, DEMO
+  lastTestedAt       DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  messages WhatsAppMessage[]
+
+  @@unique([workspaceId, phoneNumberId])
+}
+
+model WhatsAppMessage {
+  id           String              @id @default(uuid())
+  workspaceId  String
+  workspace    Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  connectionId String?
+  connection   WhatsAppConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+
+  leadId         String?
+  opportunityId  String?
+  dealId         String?
+  conversationId String?
+  campaignId     String?
+
+  providerMessageId String?
+  recipientPhone    String
+  senderPhone       String?
+  direction         String  @default("OUTBOUND") // OUTBOUND, INBOUND
+  messageType       String  @default("TEXT") // TEXT, TEMPLATE, MEDIA
+
+  content           String
+  templateName      String?
+  templateVariables Json?
+
+  status       String  @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, SENDING, SENT, DELIVERED, READ, FAILED
+  errorCode    String?
+  errorMessage String?
+
+  approvedByUserId String?
+  approvedAt       DateTime?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+  readAt           DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  campaign WhatsAppCampaign? @relation(fields: [campaignId], references: [id])
+}
+
+model WhatsAppOptOut {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  phone       String
+  reason      String?   @default("STOP")
+  optedOutAt  DateTime  @default(now())
+
+  @@unique([workspaceId, phone])
+}
+
+model WhatsAppCampaign {
+  id             String    @id @default(uuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name           String
+  templateName   String?
+  status         String    @default("DRAFT") // DRAFT, PENDING_APPROVAL, SENDING, COMPLETED, CANCELLED
+  totalLeads     Int       @default(0)
+  sentCount      Int       @default(0)
+  deliveredCount Int       @default(0)
+  readCount      Int       @default(0)
+  failedCount    Int       @default(0)
+  optOutCount    Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  messages WhatsAppMessage[]
+}
+
+enum BusinessSize {
+  SOLO
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+enum OperatingScope {
+  LOCAL
+  CITY
+  REGIONAL
+  NATIONAL
+  INTERNATIONAL
+}
+
+enum BusinessMode {
+  LOCAL_BUSINESS
+  B2B
+  B2C
+  MANUFACTURER
+  SERVICE_BUSINESS
+  ENTERPRISE
+}
+
+model BusinessProfile {
+  id          String    @id @default(uuid())
+  workspaceId String    @unique
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  companyName         String?
+  industry            String?
+  subIndustry         String?
+  businessType        String?
+  businessModel       String?
+  businessDescription String?
+
+  businessSize   BusinessSize   @default(SMALL)
+  operatingScope OperatingScope @default(LOCAL)
+  businessModes  BusinessMode[]
+
+  primaryLocation    Json? // { label, city, state, country, latitude, longitude }
+  operatingLocations Json? @default("[]")
+  localSearchRadius  Int?  @default(20)
+
+  products            Json?   @default("[]")
+  services            Json?   @default("[]")
+  targetBuyerProfiles Json?   @default("[]")
+  targetIndustries    Json?   @default("[]")
+  targetLocations     Json?   @default("[]")
+  searchKeywords      Json?   @default("[]")
+  primaryGoals        Json?   @default("[]")
+  enabledFeatures     Json?   @default("[]")
+  valueProposition    String?
+
+  confirmedValues Json?
+  aiSuggestions   Json?
+  confidenceScore Float? @default(0.95)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id                   String    @id @default(uuid())
+  workspaceId          String
+  workspace            Workspace @relation(fields: [workspaceId], references: [id])
+  name                 String
+  category             String?
+  basePrice            Float?
+  description          String?
+  image                String?
+  units                Int       @default(0)
+  sku                  String?
+  unit                 String?   @default("Quintal")
+  costPrice            Float?
+  minSellingPrice      Float?
+  targetSellingPrice   Float?
+  maxDiscountPercent   Float?
+  logisticsCostPerUnit Float?
+  status               String    @default("draft") // draft, ai-ready, needs-attention, low-stock
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  inventoryItems InventoryItem[]
+  workflows      AiWorkflow[]
+}
+
+model InventoryItem {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  productId   String
+  product     Product   @relation(fields: [productId], references: [id])
+  quantity    Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  workflows AiWorkflow[]
+}
+
+model Lead {
+  id                 String    @id @default(uuid())
+  workspaceId        String
+  workspace          Workspace @relation(fields: [workspaceId], references: [id])
+  name               String
+  website            String?
+  industry           String?
+  location           String?
+  address            String?
+  phone              String?
+  publicEmail        String?
+  description        String?
+  matchScore         Int?
+  scoreBreakdown     Json? // Stores detailed scoring like { industry: 30, buyerSegment: 20... }
+  status             String    @default("DISCOVERED") // DISCOVERED, RESEARCHING, QUALIFIED, REJECTED, ARCHIVED
+  verificationStatus String    @default("UNVERIFIED") // UNVERIFIED, PARTIALLY_VERIFIED, VERIFIED
+
+  selectedProductId String?
+  recommendedAction String?
+  salesPotential    String?
+  lastResearchedAt  DateTime?
+
+  sources          LeadSource[]
+  research         LeadResearch[]
+  outreachMessages OutreachMessage[]
+  deals            Deal[]
+  proposals        Proposal[]
+  quotations       Quotation[]
+  followUpTasks    FollowUpTask[]
+  dealActivities   DealActivity[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LeadSource {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  sourceType   String // GOOGLE_PLACES, WEB_SEARCH, WEBSITE, FIRECRAWL, OPENSTREETMAP, TAVILY
+  sourceUrl    String?
+  externalId   String?
+  rawReference Json?
+  retrievedAt  DateTime @default(now())
+}
+
+model LeadResearch {
+  id           String   @id @default(uuid())
+  leadId       String
+  lead         Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  query        String?
+  buyerSegment String?
+  summary      String?
+  evidence     Json? // Store verified facts, inferences, unknowns
+  researchedAt DateTime @default(now())
+}
+
+model AiWorkflow {
+  id             String         @id @default(uuid())
+  workspaceId    String
+  workspace      Workspace      @relation(fields: [workspaceId], references: [id])
+  status         String         @default("RUNNING") // RUNNING, COMPLETED, FAILED
+  userRequest    String
+  locationScope  String // INDIA, GLOBAL, CUSTOM
+  customLocation String?
+  productId      String?
+  product        Product?       @relation(fields: [productId], references: [id])
+  inventoryId    String?
+  inventoryItem  InventoryItem? @relation(fields: [inventoryId], references: [id])
+
+  events ActivityEvent[]
+
+  userId          String?
+  completedAt     DateTime?
+  failedAt        DateTime?
+  errorMessage    String?
+  discoveredCount Int?
+  qualifiedCount  Int?
+
+  // Provider Telemetry
+  provider           String?
+  model              String?
+  requestCount       Int?    @default(0)
+  successfulRequests Int?    @default(0)
+  rateLimitCount     Int?    @default(0)
+  fallbackCount      Int?    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ActivityEvent {
+  id         String     @id @default(uuid())
+  workflowId String
+  workflow   AiWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  type       String // workflow_started, inventory_loaded, etc.
+  data       Json?
+  createdAt  DateTime   @default(now())
+}
+
+model Opportunity {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  // Identity
+  companyName  String?
+  legalName    String?
+  category     String?
+  industry     String?
+  businessType String? // BUYER, DISTRIBUTOR, RESELLER, WHOLESALE_BUYER, RETAILER, PARTNERSHIP, SUPPLIER_RELATIONSHIP, OTHER
+
+  // Backward compatibility fields
+  title           String?
+  description     String?
+  type            String  @default("BUYER")
+  status          String  @default("ai_discovered")
+  confidence      Int     @default(0)
+  potentialImpact Float?
+
+  // Location
+  country     String?
+  stateRegion String?
+  city        String?
+  fullAddress String?
+  postalCode  String?
+  latitude    Float?
+  longitude   Float?
+
+  // Public Company Contact
+  website                 String?
+  contactPageUrl          String?
+  publicEmail             String?
+  emailVerificationStatus String? @default("UNVERIFIED")
+  phone                   String?
+  publicLinkedInUrl       String?
+  socialLinks             Json?
+
+  // Named Decision Maker (Optional - only if reliably found)
+  contactName        String?
+  firstName          String?
+  lastName           String?
+  jobTitle           String?
+  department         String?
+  seniority          String?
+  contactLinkedInUrl String?
+  workEmail          String?
+  directPhone        String?
+
+  // Opportunity Intelligence
+  productId                 String?
+  productName               String?
+  matchedProductIds         Json?   @default("[]")
+  matchedProductNames       Json?   @default("[]")
+  matchReason               String?
+  reason                    String?
+  opportunityType           String  @default("BUYER")
+  opportunityScore          Int     @default(0)
+  scoreBreakdown            Json?
+  qualificationStatus       String  @default("QUALIFIED")
+  verificationStatus        String  @default("UNVERIFIED")
+  verifiedFacts             Json?   @default("[]")
+  aiInsights                Json?   @default("[]")
+  painPointsOrBusinessNeeds String?
+  buyingSignals             String?
+  recommendedNextAction     String?
+  recommendedAction         String?
+  recommendedContactChannel String?
+  personalizationContext    String?
+
+  // Price Intelligence & Profitability Engine
+  buyerPriceType           String? @default("UNKNOWN") // VERIFIED, ESTIMATED, MARKET_BENCHMARK, UNKNOWN
+  buyerBuyingPrice         Float?
+  buyerPriceUnit           String?
+  buyerPriceSource         String?
+  buyerPriceConfidence     String? @default("UNKNOWN") // HIGH, MEDIUM, LOW, UNKNOWN
+  estimatedQuantity        Float?
+  estimatedFrequency       String?
+  buyerSavingsPerUnit      Float?
+  grossMarginPerUnit       Float?
+  potentialGrossProfit     Float?
+  recommendedOfferPrice    Float?
+  priceCompetitiveness     String? @default("NOT_ENOUGH_DATA") // HIGHLY_COMPETITIVE, COMPETITIVE, NEUTRAL, LOW_COMPETITIVENESS, NOT_ENOUGH_DATA
+  commercialRecommendation String? @default("NEEDS_PRICE_VERIFICATION") // PURSUE_NOW, NEGOTIATE, LOW_PRIORITY, NEEDS_PRICE_VERIFICATION
+  pricingEvidence          Json?   @default("[]")
+
+  discoveredAt      DateTime  @default(now())
+  lastVerifiedAt    DateTime? @default(now())
+  firstSeenAt       DateTime  @default(now())
+  lastSeenAt        DateTime  @default(now())
+  evidenceHash      String?
+  contentHash       String?
+  sourceFingerprint String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sources          OpportunitySource[]
+  deals            Deal[]
+  conversations    Conversation[]
+  outreachMessages OutreachMessage[]
+  notifications    OpportunityNotification[]
+}
+
+model OpportunityMonitor {
+  id                  String    @id @default(uuid())
+  workspaceId         String    @unique
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  enabled             Boolean   @default(true)
+  frequencyMinutes    Int       @default(60)
+  monitoringScope     String    @default("REGIONAL")
+  status              String    @default("IDLE") // IDLE, RUNNING, PAUSED, ERROR
+  lastRunAt           DateTime?
+  nextRunAt           DateTime?
+  lastSuccessfulRunAt DateTime?
+  lastError           String?
+  maxDailyRuns        Int       @default(24)
+  runsTodayCount      Int       @default(0)
+  lastRunDate         String?
+
+  // Notification Preferences
+  inAppNotifyEnabled    Boolean @default(true)
+  browserPushEnabled    Boolean @default(false)
+  whatsAppNotifyEnabled Boolean @default(false)
+  minMatchScoreAlert    Int     @default(70)
+  notifyNewOnly         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs OpportunityResearchRun[]
+}
+
+model OpportunityResearchRun {
+  id                            String              @id @default(uuid())
+  workspaceId                   String
+  workspace                     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  monitorId                     String?
+  monitor                       OpportunityMonitor? @relation(fields: [monitorId], references: [id], onDelete: SetNull)
+  status                        String              @default("RUNNING") // RUNNING, COMPLETED, PARTIAL, FAILED, SKIPPED_ALREADY_RUNNING
+  startedAt                     DateTime            @default(now())
+  completedAt                   DateTime?
+  opportunitiesFound            Int                 @default(0)
+  newOpportunitiesFound         Int                 @default(0)
+  updatedOpportunitiesFound     Int                 @default(0)
+  duplicateOpportunitiesIgnored Int                 @default(0)
+  summary                       String?
+  error                         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OpportunityNotification {
+  id             String       @id @default(uuid())
+  workspaceId    String
+  workspace      Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunityId  String?
+  opportunity    Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+  type           String       @default("OPPORTUNITY_NEW_FOUND") // OPPORTUNITY_NEW_FOUND, OPPORTUNITY_UPDATED
+  title          String
+  message        String
+  read           Boolean      @default(false)
+  idempotencyKey String       @unique
+  metadata       Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PriceObservation {
+  id            String    @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  productId     String?
+  opportunityId String?
+  price         Float
+  currency      String    @default("INR")
+  unit          String    @default("Quintal")
+  source        String // PUBLIC_LISTING, TENDER, MARKETPLACE, QUOTATION, USER_ENTERED, MARKET_BENCHMARK, AI_INFERENCE
+  confidence    String    @default("MEDIUM") // HIGH, MEDIUM, LOW, UNKNOWN
+  evidenceUrl   String?
+  rawReference  Json?
+  observedAt    DateTime  @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OpportunitySource {
+  id                 String      @id @default(uuid())
+  opportunityId      String
+  opportunity        Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  sourceType         String // TAVILY, OPENSTREETMAP, FIRECRAWL, OFFICIAL_WEBSITE, CONTACT_PAGE, LINKEDIN, MANUAL, OTHER
+  sourceUrl          String?
+  sourceName         String?
+  retrievedAt        DateTime    @default(now())
+  verificationStatus String?     @default("VERIFIED")
+}
+
+model Deal {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id], onDelete: SetNull)
+
+  title       String
+  companyName String
+  stage       String @default("QUALIFIED") // RESEARCHING, QUALIFIED, QUOTE_SENT, NEGOTIATING, WON, LOST
+
+  productName       String?
+  matchScore        Int     @default(85)
+  estimatedQuantity Int?    @default(100)
+  estimatedValue    Float?  @default(10000)
+
+  recommendedNextAction String?
+  buyerIntent           String?
+  proposedPrice         Float?
+  negotiationNotes      String?
+
+  lastActivityAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversations    Conversation[]
+  outreachMessages OutreachMessage[]
+}
+
+model Conversation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  userId      String?
+
+  opportunityId String?
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id], onDelete: SetNull)
+
+  dealId String?
+  deal   Deal?   @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  title              String   @default("New Session")
+  summary            String?
+  activeContext      Json?
+  currentStage       String   @default("IDLE")
+  status             String   @default("ACTIVE") // ACTIVE, ARCHIVED, CLOSED
+  lastMessagePreview String?
+  lastActivityAt     DateTime @default(now())
+  lastMessageAt      DateTime @default(now())
+
+  objective              String?
+  activeWorkflowId       String?
+  selectedProductIds     Json?    @default("[]")
+  selectedLeadIds        Json?    @default("[]")
+  recommendedNextActions Json?    @default("[]")
+  pendingApproval        Boolean  @default(false)
+  emailConnectionStatus  String   @default("DISCONNECTED")
+  lastAction             String?
+  contextSummary         String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  messages         ConversationMessage[]
+  outreachMessages OutreachMessage[]
+
+  @@index([workspaceId, userId, lastActivityAt])
+}
+
+model ConversationMessage {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           String // user, assistant, system, outbound, inbound
+  direction      String?      @default("OUTBOUND") // OUTBOUND, INBOUND
+  isSimulated    Boolean      @default(false)
+  content        String
+  metadata       Json? // UI actions, options, progress steps, negotiation analysis, workflowId
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Proposal {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  leadId      String
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  title       String
+  content     String
+  status      String    @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Quotation {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  leadId      String
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  title       String
+  amount      Float
+  items       Json?
+  status      String    @default("DRAFT") // DRAFT, SENT, ACCEPTED, REJECTED
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model FollowUpTask {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  workspace         Workspace @relation(fields: [workspaceId], references: [id])
+  leadId            String
+  lead              Lead      @relation(fields: [leadId], references: [id])
+  outreachMessageId String?
+  dueAt             DateTime
+  status            String    @default("PENDING") // PENDING, COMPLETED, CANCELLED
+  prompt            String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+}
+
+model DealActivity {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  leadId      String?
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  title       String
+  type        String // INVENTORY_ANALYZED, BUYER_DISCOVERED, OUTREACH_SENT, REPLY_RECEIVED, etc.
+  details     Json?
+  createdAt   DateTime  @default(now())
+}
