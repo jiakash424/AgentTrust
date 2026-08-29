@@ -223,8 +223,9 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* Two engines */}
-      <section id="product" className="max-w-6xl mx-auto px-5 lg:px-8 py-24">
+      {/* Two engines / Solutions */}
+      <section id="solutions" className="max-w-6xl mx-auto px-5 lg:px-8 py-24 scroll-mt-16">
+        <div id="product" className="scroll-mt-16"></div>
         <div className="text-center max-w-2xl mx-auto mb-16">
           <div className="label-mono text-[var(--color-coral-ink)] mb-3">
             Two engines. One merchant.
@@ -311,7 +312,7 @@ export default function Landing() {
       {/* How NOVA works */}
       <section
         id="how"
-        className="border-y border-[var(--color-line)] bg-[var(--color-surface-2)]"
+        className="border-y border-[var(--color-line)] bg-[var(--color-surface-2)] scroll-mt-16"
       >
         <div className="max-w-6xl mx-auto px-5 lg:px-8 py-24">
           <div className="max-w-2xl mb-14">
@@ -352,7 +353,10 @@ export default function Landing() {
       </section>
 
       {/* Final CTA */}
-      <section id="commerce" className="max-w-6xl mx-auto px-5 lg:px-8 py-28">
+      <section
+        id="commerce"
+        className="max-w-6xl mx-auto px-5 lg:px-8 py-28 scroll-mt-16"
+      >
         <div className="relative overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-ink)] p-12 md:p-16 text-center">
           <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-[300px] w-[500px] rounded-full bg-[var(--color-coral)] blur-[120px] opacity-25" />
           <div className="relative">
