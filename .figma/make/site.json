@@ -1,0 +1,11 @@
+{
+  "title": "AgentTrust",
+  "description": "Autonomous AI Business Growth & Agentic Commerce Platform for finding, qualifying, contacting, and progressing real B2B sales opportunities.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
