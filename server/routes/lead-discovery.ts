@@ -263,7 +263,151 @@ export async function runWorkflow(
       return;
     }
 
-    // 2. OUTREACH PREPARATION INTENT RECOGNITION
+    // 2. INVENTORY & PRODUCT CATALOG ANALYSIS INTENT RECOGNITION (Fast 1-2s Response)
+    const isInventoryCommand =
+      userPrompt.includes("inventory") ||
+      userPrompt.includes("stock") ||
+      userPrompt.includes("analyze my") ||
+      userPrompt.includes("what products") ||
+      userPrompt.includes("my products") ||
+      userPrompt.includes("check catalog") ||
+      userPrompt.includes("available stock");
+
+    if (isInventoryCommand) {
+      console.log(
+        `[runWorkflow] Fast INVENTORY ANALYSIS triggered: "${rawPrompt}"`,
+      );
+
+      workflowEvents.emitProgress({
+        workflowId,
+        stage: "inventory_loaded",
+        stepName: "Inspecting product catalog & warehouse stock...",
+        completedSteps: 1,
+        totalSteps: 3,
+        timestamp: new Date().toISOString(),
+      });
+
+      const products = await prisma.product.findMany({
+        where: { workspaceId },
+      });
+      const inventory = await prisma.inventoryItem.findMany({
+        where: { workspaceId },
+        include: { product: true },
+      });
+      const activeCtx =
+        await activeBusinessContextService.resolveContext(workspaceId);
+
+      const buildDirectInventoryAnalysis = () => {
+        const totalStock = products.reduce(
+          (acc, p) => acc + (p.units || 0),
+          0,
+        );
+        const totalValue = products.reduce(
+          (acc, p) => acc + (p.units || 0) * (p.costPrice || 0),
+          0,
+        );
+
+        let md = `## 🌾 Real-Time Inventory & Commercial Analysis\n\n`;
+        md += `**Total Inventory:** ${totalStock.toLocaleString()} Units | **Total Valuation @ Cost:** ₹${totalValue.toLocaleString("en-IN")}\n\n`;
+        md += `| # | Product Name | Stock Units | Unit | Cost Price | Target Sell Price | Margin @ Target | Status |\n`;
+        md += `|---|---|---|---|---|---|---|---|\n`;
+        products.forEach((p, idx) => {
+          const margin = (p.targetSellingPrice || 0) - (p.costPrice || 0);
+          md += `| ${idx + 1} | **${p.name}** | ${p.units || 0} | ${p.unit || "Quintal"} | ₹${p.costPrice || 0} | ₹${p.targetSellingPrice || 0} | **+₹${margin}** | \`${p.status || "ai-ready"}\` |\n`;
+        });
+        md += `\n### 💡 Strategic Commercial Recommendations\n`;
+        md += `1. **Priority Stock Liquidation:** Products with higher unit margins (e.g. *${products[0]?.name || "Primary Product"}*) should be prioritized for bulk wholesale distribution.\n`;
+        md += `2. **B2B Buyer Matching:** All ${products.length} registered products are commercial-ready for automated outreach and price intelligence.\n`;
+        md += `3. **Action:** Click below to explore active wholesale opportunities or discover new regional buyers.`;
+        return md;
+      };
+
+      let inventoryAnalysis = "";
+      try {
+        const ai = getAIProvider();
+        const aiPromise = ai.chat([
+          {
+            role: "system",
+            content: `You are NOVA, the autonomous AI Sales & Commerce OS agent.
+Provide a clear, highly structured, professional commercial inventory evaluation based on the user's registered business products and inventory items.
+Business Context: ${activeCtx.businessDescription || activeCtx.businessType} (Location: ${activeCtx.primaryLocation?.city || "India"})
+Products in Catalog: ${JSON.stringify(
+              products.map((p) => ({
+                name: p.name,
+                units: p.units,
+                unit: p.unit,
+                costPrice: p.costPrice,
+                targetSellingPrice: p.targetSellingPrice,
+                minSellingPrice: p.minSellingPrice,
+                status: p.status,
+              })),
+            )}
+
+Format your answer cleanly in markdown with a summary table, margin highlights, and recommended buyer matching actions.`,
+          },
+          { role: "user", content: rawPrompt },
+        ]);
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("AI timeout")), 4000),
+        );
+
+        const aiRes: any = await Promise.race([aiPromise, timeoutPromise]);
+        if (aiRes?.content) inventoryAnalysis = aiRes.content;
+      } catch (err: any) {
+        console.warn("[runWorkflow] Fast inventory analysis AI fallback:", err.message);
+      }
+
+      if (!inventoryAnalysis) {
+        inventoryAnalysis = buildDirectInventoryAnalysis();
+      }
+
+      await prisma.aiWorkflow.upsert({
+        where: { id: workflowId },
+        update: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+        create: {
+          id: workflowId,
+          workspaceId,
+          userRequest: input.userRequest,
+          locationScope: "INDIA",
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+
+      await prisma.activityEvent
+        .create({
+          data: {
+            workflowId,
+            type: "FINAL_ANSWER",
+            data: {
+              answer: inventoryAnalysis,
+              userQuery: rawPrompt,
+            },
+          },
+        })
+        .catch(console.error);
+
+      workflowEvents.emitProgress({
+        workflowId,
+        stage: "workflow_completed",
+        stepName: inventoryAnalysis,
+        completedSteps: 3,
+        totalSteps: 3,
+        details: {
+          finalAnswer: inventoryAnalysis,
+          userQuery: rawPrompt,
+        },
+        timestamp: new Date().toISOString(),
+      });
+
+      return;
+    }
+
+    // 3. OUTREACH PREPARATION INTENT RECOGNITION
     const isOutreachCommand =
       userPrompt.includes("outreach") ||
       userPrompt.includes("prepare personalized") ||
