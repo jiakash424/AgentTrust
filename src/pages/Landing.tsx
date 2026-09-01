@@ -84,7 +84,7 @@ function HeroPreview() {
         initial={{ opacity: 0, scale: 0.9, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ delay: 1.1, type: "spring", stiffness: 200, damping: 18 }}
-        className="absolute -right-4 md:-right-8 -bottom-6 bg-[var(--color-ink)] text-white rounded-[var(--radius-md)] p-4 shadow-float w-52"
+        className="absolute -right-4 md:-right-8 -bottom-6 bg-gradient-to-br from-[#111318] to-[#1a1e26] border border-white/10 text-white rounded-[var(--radius-md)] p-4 shadow-float w-52"
       >
         <div className="label-mono text-white/50 mb-1">Est. opportunity</div>
         <div className="font-serif text-2xl">₹12L – ₹18L</div>
@@ -357,7 +357,7 @@ export default function Landing() {
         id="commerce"
         className="max-w-6xl mx-auto px-5 lg:px-8 py-28 scroll-mt-16"
       >
-        <div className="relative overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-ink)] p-12 md:p-16 text-center">
+        <div className="relative overflow-hidden rounded-[var(--radius-xl)] bg-gradient-to-br from-[#111318] via-[#181b22] to-[#0f1115] border border-white/10 p-12 md:p-16 text-center shadow-2xl">
           <div className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-[300px] w-[500px] rounded-full bg-[var(--color-coral)] blur-[120px] opacity-25" />
           <div className="relative">
             <NovaMark size={28} active />

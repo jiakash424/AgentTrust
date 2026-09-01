@@ -33,6 +33,8 @@ import { fetchApi } from "../lib/api";
 import { cn } from "../lib/cn";
 import { OpportunityDetailDrawer } from "../components/OpportunityDetailDrawer";
 import { OpportunityMonitorPanel } from "../components/OpportunityMonitorPanel";
+import { EmailLeadComposerModal } from "../components/EmailLeadComposerModal";
+import { NovaChatModal } from "../components/NovaChatModal";
 
 type Tone = "coral" | "iris" | "sage" | "amber" | "neutral" | "rose";
 
@@ -87,15 +89,19 @@ function OpportunityCard({
   isSelected,
   onToggleSelect,
   onViewDetail,
+  onPrepareOutreach,
+  onAskNova,
+  onResearch,
 }: {
   op: any;
   feature: boolean;
   isSelected?: boolean;
   onToggleSelect?: () => void;
   onViewDetail?: (id: string) => void;
+  onPrepareOutreach?: (op: any) => void;
+  onAskNova?: (op: any) => void;
+  onResearch?: (op: any) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const navigate = useNavigate();
   const pot =
     potentialMeta[op.potential as Potential] || potentialMeta["medium-high"];
   const stat =
@@ -103,21 +109,29 @@ function OpportunityCard({
     statusMeta["ai-discovered"];
 
   const handleAskNova = () => {
-    navigate(
-      `/app?mode=OPPORTUNITY&entityType=OPPORTUNITY&entityId=${op.id}&action=explain`,
-    );
+    if (onAskNova) {
+      onAskNova(op);
+    } else if (onViewDetail) {
+      onViewDetail(op.id);
+    }
   };
 
   const handleResearch = () => {
-    navigate(
-      `/app?mode=OPPORTUNITY&entityType=OPPORTUNITY&entityId=${op.id}&action=research`,
-    );
+    if (onResearch) {
+      onResearch(op);
+    } else if (onAskNova) {
+      onAskNova(op);
+    } else if (onViewDetail) {
+      onViewDetail(op.id);
+    }
   };
 
   const handleOutreach = () => {
-    navigate(
-      `/app?mode=OPPORTUNITY&entityType=OPPORTUNITY&entityId=${op.id}&action=outreach`,
-    );
+    if (onPrepareOutreach) {
+      onPrepareOutreach(op);
+    } else if (onViewDetail) {
+      onViewDetail(op.id);
+    }
   };
 
   return (
@@ -313,9 +327,27 @@ export default function Opportunities() {
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeDetailId, setActiveDetailId] = useState<string | null>(null);
+  const [activeOutreachOpp, setActiveOutreachOpp] = useState<any | null>(null);
+  const [activeNovaOpp, setActiveNovaOpp] = useState<any | null>(null);
+  const [novaInitialQuery, setNovaInitialQuery] = useState<string | undefined>(
+    undefined,
+  );
 
-  const fetchOpportunities = async () => {
-    setLoading(true);
+  const handleResearchOpportunity = (opp: any) => {
+    const pName = opp.productName || opp.matchedProduct || "our inventory";
+    setNovaInitialQuery(
+      `Research and evaluate ${opp.companyName || "this account"} deeply: Analyze commercial viability, estimated procurement capacity for ${pName}, APMC market rate comparison, and provide a 3-step high-converting outreach approach.`,
+    );
+    setActiveNovaOpp(opp);
+  };
+
+  const handleAskNovaOpportunity = (opp: any) => {
+    setNovaInitialQuery(undefined);
+    setActiveNovaOpp(opp);
+  };
+
+  const fetchOpportunities = async (isInitial = false) => {
+    if (isInitial) setLoading(true);
     setError(null);
     try {
       const res = await fetchApi<any>("/api/opportunities", {
@@ -392,14 +424,14 @@ export default function Opportunities() {
       console.error(err);
       setError(err.message || "Failed to load opportunities");
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchOpportunities();
+    fetchOpportunities(true);
 
-    const handleUpdate = () => fetchOpportunities();
+    const handleUpdate = () => fetchOpportunities(false);
     window.addEventListener("opportunitiesUpdated", handleUpdate);
     return () =>
       window.removeEventListener("opportunitiesUpdated", handleUpdate);
@@ -546,7 +578,7 @@ export default function Opportunities() {
       )}
 
       {/* Main Grid or Empty States */}
-      {loading ? (
+      {loading && data.length === 0 ? (
         <div className="py-20 text-center">
           <Sparkles
             size={24}
@@ -580,21 +612,28 @@ export default function Opportunities() {
             <Search size={28} />
           </div>
           <h2 className="font-serif text-2xl text-[var(--color-ink)]">
-            No opportunities discovered yet
+            {intentFilter === "SUPPLIER"
+              ? "No raw material suppliers discovered yet"
+              : "No opportunities discovered yet"}
           </h2>
           <p className="text-sm text-[var(--color-ink-soft)] max-w-md mx-auto leading-relaxed">
-            NOVA hasn't discovered qualified opportunities for your inventory
-            yet. Run opportunity discovery to find real buyers.
+            {intentFilter === "SUPPLIER"
+              ? "NOVA hasn't indexed raw material suppliers & mandi aggregators for your manufacturing inventory yet. Run procurement discovery to find verified suppliers."
+              : "NOVA hasn't discovered qualified opportunities for your inventory yet. Run opportunity discovery to find real buyers."}
           </p>
           <div className="pt-2">
             <Button
               onClick={() =>
                 navigate(
-                  "/app?q=Discover%20qualified%20B2B%20buyers%20for%20my%20products",
+                  intentFilter === "SUPPLIER"
+                    ? "/app?q=Discover%20raw%20material%20suppliers%20and%20mandi%20vendors%20for%20my%20products"
+                    : "/app?q=Discover%20qualified%20B2B%20buyers%20for%20my%20products",
                 )
               }
             >
-              Discover opportunities
+              {intentFilter === "SUPPLIER"
+                ? "Discover raw material suppliers"
+                : "Discover opportunities"}
             </Button>
           </div>
         </Card>
@@ -608,6 +647,9 @@ export default function Opportunities() {
               isSelected={selectedIds.includes(op.id)}
               onToggleSelect={() => toggleSelect(op.id)}
               onViewDetail={(id) => setActiveDetailId(id)}
+              onPrepareOutreach={(opp) => setActiveOutreachOpp(opp)}
+              onAskNova={(opp) => handleAskNovaOpportunity(opp)}
+              onResearch={(opp) => handleResearchOpportunity(opp)}
             />
           ))}
         </div>
@@ -617,6 +659,24 @@ export default function Opportunities() {
       <OpportunityDetailDrawer
         opportunityId={activeDetailId}
         onClose={() => setActiveDetailId(null)}
+      />
+
+      {/* Direct In-Place Email Outreach Composer Modal */}
+      <EmailLeadComposerModal
+        isOpen={!!activeOutreachOpp}
+        onClose={() => setActiveOutreachOpp(null)}
+        opportunity={activeOutreachOpp}
+      />
+
+      {/* Direct In-Place NOVA Chat Assistant Modal */}
+      <NovaChatModal
+        isOpen={!!activeNovaOpp}
+        onClose={() => {
+          setActiveNovaOpp(null);
+          setNovaInitialQuery(undefined);
+        }}
+        opportunity={activeNovaOpp}
+        initialQuery={novaInitialQuery}
       />
     </PageFade>
   );

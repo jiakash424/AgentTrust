@@ -32,6 +32,9 @@ import { CommandPaletteModal } from "../CommandPaletteModal";
 import { NotificationPopover } from "../NotificationPopover";
 import { UserProfileDropdown } from "../UserProfileDropdown";
 import { BusinessContextModal } from "../BusinessContextModal";
+import { OnboardingTourModal } from "../OnboardingTourModal";
+import { TourProvider } from "../../contexts/TourContext";
+import { InteractivePageTourGuide } from "../InteractivePageTourGuide";
 import { useAuth } from "../../contexts/AuthContext";
 
 const primaryNav = [
@@ -412,6 +415,17 @@ function TopBar() {
             </kbd>
           </button>
 
+          {/* Interactive Onboarding Guide & Tour Trigger Button */}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent("openOnboardingTour"))}
+            aria-label="App Guide & Tour"
+            className="h-9 px-2.5 flex items-center gap-1.5 rounded-[var(--radius-sm)] border border-[var(--color-line)] bg-[var(--color-surface)] text-[var(--color-ink-soft)] hover:text-[var(--color-coral-ink)] hover:border-[var(--color-coral)]/40 hover:bg-[var(--color-coral-soft)]/40 transition-all text-xs font-semibold cursor-pointer shadow-2xs"
+            title="App Guide & Tour (App ko kaise use karein)"
+          >
+            <Sparkles size={14} className="text-[var(--color-coral)]" />
+            <span className="hidden sm:inline">App Guide</span>
+          </button>
+
           <div className="relative">
             <button
               onClick={() => {
@@ -562,7 +576,7 @@ function MobileNav() {
   );
 }
 
-export default function AppShell() {
+function AppShellContent() {
   const { pathname } = useLocation();
   const { workspaceId } = useAuth();
   const [collapsed, setCollapsed] = useState(
@@ -570,6 +584,7 @@ export default function AppShell() {
       typeof window !== "undefined" &&
       localStorage.getItem("at-sidebar-collapsed") === "1",
   );
+
   useEffect(() => {
     localStorage.setItem("at-sidebar-collapsed", collapsed ? "1" : "0");
   }, [collapsed]);
@@ -598,13 +613,24 @@ export default function AppShell() {
     }
   }, [workspaceId, pathname]);
 
+  const isNovaChat =
+    pathname === "/app" ||
+    pathname === "/app/" ||
+    Boolean(pathname.match(/^\/app\/w\/[^/]+$/)) ||
+    Boolean(pathname.match(/^\/app\/workspace\/[^/]+$/));
+
   return (
     <div className="flex h-screen overflow-hidden bg-[var(--color-bg)]">
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed((c) => !c)} />
       <div className="flex-1 min-w-0 flex flex-col h-full overflow-hidden">
         <TopBar />
         <main
-          className="flex-1 overflow-y-auto px-5 lg:px-8 py-7 pb-24 lg:pb-10"
+          className={cn(
+            "flex-1 min-h-0",
+            isNovaChat
+              ? "flex flex-col overflow-hidden px-4 lg:px-8 pt-4 pb-2"
+              : "overflow-y-auto px-5 lg:px-8 py-7 pb-24 lg:pb-10",
+          )}
           key={pathname}
         >
           <Outlet />
@@ -612,6 +638,15 @@ export default function AppShell() {
       </div>
       <MobileNav />
       <GlobalWorkflowProgress />
+      <InteractivePageTourGuide />
     </div>
+  );
+}
+
+export default function AppShell() {
+  return (
+    <TourProvider>
+      <AppShellContent />
+    </TourProvider>
   );
 }

@@ -38,9 +38,8 @@ app.use(express.json());
 // Routes
 app.use("/api/lead-search", leadSearchRouter);
 app.use("/api", healthRouter);
-app.use("/api/lead-discovery", leadDiscoveryRouter);
-app.use("/api/integrations", integrationsRouter);
-app.use("/api", outreachRouter); // mounted at /api so /api/leads/:id/outreach and /api/outreach/:id work
+app.use("/api/outreach", outreachRouter);
+app.use("/api", outreachRouter); // mounted at /api so /api/leads/:id/outreach, /api/approvals work
 app.use("/api", threadsRouter); // mounted at /api so /api/integrations/gmail/sync works
 app.use("/api/leads", leadsRouter);
 app.use("/api/workflows", workflowsRouter);

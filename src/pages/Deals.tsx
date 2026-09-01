@@ -118,28 +118,33 @@ export default function Deals() {
   const [active, setActive] = useState<any | null>(null);
   const [updatingStage, setUpdatingStage] = useState(false);
 
-  const fetchDeals = async () => {
+  const fetchDeals = async (isInitial = false) => {
     if (!session || !workspaceId) return;
-    setLoading(true);
+    if (isInitial) setLoading(true);
     setError(null);
     try {
-      const data = await fetchApi<{ deals: any[]; stageCounts: any }>(
-        "/api/deals",
-        { session, workspaceId },
-      );
-      setDeals(data.deals || []);
-      setStageCounts(data.stageCounts || {});
+      const data = await fetchApi<any>("/api/deals", {
+        session,
+        workspaceId,
+      });
+      const dealsList = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.deals)
+          ? data.deals
+          : [];
+      setDeals(dealsList);
+      setStageCounts(data?.stageCounts || {});
     } catch (err: any) {
       setError(err.message || "Failed to load deals pipeline");
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDeals();
+    fetchDeals(true);
 
-    const handleUpdate = () => fetchDeals();
+    const handleUpdate = () => fetchDeals(false);
     window.addEventListener("dealsUpdated", handleUpdate);
     window.addEventListener("opportunitiesUpdated", handleUpdate);
     return () => {
@@ -208,7 +213,7 @@ export default function Deals() {
         </div>
       )}
 
-      {loading ? (
+      {loading && deals.length === 0 ? (
         <Card className="p-12 text-center">
           <p className="font-serif text-xl text-[var(--color-ink)]">
             Loading deals pipeline...
@@ -278,7 +283,7 @@ export default function Deals() {
       {/* Centered Modal Dialog for Deal Details */}
       <AnimatePresence>
         {active && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/15 overflow-y-auto">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/40 backdrop-blur-sm overflow-y-auto">
             <motion.div
               initial={{ opacity: 0, scale: 0.96 }}
               animate={{ opacity: 1, scale: 1 }}

@@ -27,6 +27,9 @@ import {
   PageHeader,
   PageFade,
 } from "../components/ui";
+import { OpportunityDetailDrawer } from "../components/OpportunityDetailDrawer";
+import { EmailLeadComposerModal } from "../components/EmailLeadComposerModal";
+import { NovaChatModal } from "../components/NovaChatModal";
 import { NovaMark } from "../components/brand";
 import { useAuth } from "../contexts/AuthContext";
 import { fetchApi } from "../lib/api";
@@ -39,6 +42,9 @@ export default function Growth() {
   const [loading, setLoading] = useState(true);
   const [activeContext, setActiveContext] = useState<any>(null);
   const [tab, setTab] = useState("all");
+  const [activeDetailId, setActiveDetailId] = useState<string | null>(null);
+  const [activeOutreachOpp, setActiveOutreachOpp] = useState<any | null>(null);
+  const [activeNovaOpp, setActiveNovaOpp] = useState<any | null>(null);
 
   const fetchGrowthData = async () => {
     if (!session || !workspaceId) return;
@@ -128,7 +134,7 @@ export default function Growth() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6 }}
-        className="relative overflow-hidden rounded-[var(--radius-xl)] bg-[var(--color-ink)] text-white p-8 md:p-10 shadow-lg"
+        className="relative overflow-hidden rounded-[var(--radius-xl)] bg-gradient-to-br from-[#111318] via-[#181b22] to-[#0f1115] text-white p-8 md:p-10 shadow-2xl border border-white/10"
       >
         <div className="pointer-events-none absolute -top-16 -right-10 h-72 w-72 rounded-full bg-[var(--color-coral)] blur-[120px] opacity-35" />
         <div className="pointer-events-none absolute -bottom-16 -left-10 h-72 w-72 rounded-full bg-emerald-500 blur-[130px] opacity-20" />
@@ -289,19 +295,19 @@ export default function Growth() {
                   {/* Top Badges */}
                   <div className="flex items-center justify-between gap-3 mb-3">
                     <div className="flex items-center gap-2">
-                      <span className="font-mono text-sm font-bold px-2 py-0.5 rounded bg-[var(--color-line)] text-[var(--color-ink)]">
+                      <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-md bg-[var(--color-surface-2)] text-[var(--color-ink)] border border-[var(--color-line)] shadow-2xs">
                         #{idx + 1}
                       </span>
                       <Badge
                         tone={score >= 85 ? "coral" : "neutral"}
-                        className="text-xs"
+                        className="text-xs font-semibold"
                       >
                         {opp.category || "POTENTIAL BUYER"}
                       </Badge>
                       {opp.verificationStatus === "VERIFIED" && (
                         <Badge
                           tone="sage"
-                          className="text-xs flex items-center gap-1"
+                          className="text-xs flex items-center gap-1 font-semibold"
                         >
                           <CheckCircle2 size={12} /> VERIFIED
                         </Badge>
@@ -309,9 +315,9 @@ export default function Growth() {
                     </div>
 
                     <div className="text-right">
-                      <span className="text-xs font-mono text-[var(--color-ink-faint)]">
+                      <span className="text-xs font-mono text-[var(--color-ink-soft)] font-medium">
                         Match Score:{" "}
-                        <strong className="text-[var(--color-coral-ink)] text-sm">
+                        <strong className="text-[var(--color-coral-ink)] text-sm font-bold">
                           {score}%
                         </strong>
                       </span>
@@ -321,23 +327,29 @@ export default function Growth() {
                   {/* Company Name & Location */}
                   <h3
                     className={cn(
-                      "font-serif font-bold text-[var(--color-ink)]",
+                      "font-serif font-bold text-[var(--color-ink)] tracking-tight",
                       isTopRanked ? "text-2xl" : "text-xl",
                     )}
                   >
                     {opp.companyName || opp.title}
                   </h3>
 
-                  <div className="flex items-center gap-3 text-xs text-[var(--color-ink-soft)] mt-1.5 flex-wrap">
-                    {opp.city && (
+                  <div className="flex items-center gap-3 text-xs text-[var(--color-ink-soft)] font-medium mt-1.5 flex-wrap">
+                    {(opp.city || opp.stateRegion || opp.country) && (
                       <span className="flex items-center gap-1">
                         <MapPin
                           size={13}
-                          className="text-[var(--color-coral)]"
+                          className="text-[var(--color-coral)] shrink-0"
                         />
-                        {[opp.city, opp.stateRegion || "India"]
-                          .filter(Boolean)
-                          .join(", ")}
+                        {Array.from(
+                          new Set(
+                            [opp.city, opp.stateRegion, opp.country || "India"]
+                              .filter(Boolean)
+                              .flatMap((s: string) =>
+                                s.split(",").map((p) => p.trim()),
+                              ),
+                          ),
+                        ).join(", ")}
                       </span>
                     )}
                     {opp.productName && (
@@ -408,27 +420,19 @@ export default function Growth() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() =>
-                        navigate(
-                          `/app?mode=OPPORTUNITY&entityType=OPPORTUNITY&entityId=${opp.id}&action=explain`,
-                        )
-                      }
+                      onClick={() => setActiveNovaOpp(opp)}
                       className="text-xs gap-1.5"
                     >
-                      <MessageSquare
+                      <Sparkles
                         size={13}
                         className="text-[var(--color-coral)]"
                       />
-                      Chat Context
+                      Ask NOVA
                     </Button>
 
                     <Button
                       size="sm"
-                      onClick={() =>
-                        navigate(
-                          `/app?mode=OPPORTUNITY&entityType=OPPORTUNITY&entityId=${opp.id}&action=outreach`,
-                        )
-                      }
+                      onClick={() => setActiveOutreachOpp(opp)}
                       className="text-xs gap-1.5 bg-[var(--color-coral)] hover:bg-[var(--color-coral-dark)] text-white"
                     >
                       <Mail size={13} />
@@ -441,6 +445,26 @@ export default function Growth() {
           })}
         </div>
       )}
+
+      {/* Opportunity Detail Drawer */}
+      <OpportunityDetailDrawer
+        opportunityId={activeDetailId}
+        onClose={() => setActiveDetailId(null)}
+      />
+
+      {/* Direct In-Place Email Outreach Composer Modal */}
+      <EmailLeadComposerModal
+        isOpen={!!activeOutreachOpp}
+        onClose={() => setActiveOutreachOpp(null)}
+        opportunity={activeOutreachOpp}
+      />
+
+      {/* Direct In-Place NOVA Chat Assistant Modal */}
+      <NovaChatModal
+        isOpen={!!activeNovaOpp}
+        onClose={() => setActiveNovaOpp(null)}
+        opportunity={activeNovaOpp}
+      />
     </PageFade>
   );
 }

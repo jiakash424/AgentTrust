@@ -11,6 +11,7 @@ import {
   Plus,
   Mail,
   Trash2,
+  Palette,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -25,15 +26,23 @@ import {
 } from "../components/ui";
 import { cn } from "../lib/cn";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme, THEME_CONFIGS } from "../contexts/ThemeContext";
 import { fetchApi } from "../lib/api";
 
 const inputCls =
   "w-full h-11 px-3.5 rounded-[var(--radius-sm)] bg-[var(--color-surface-2)] border border-[var(--color-line)] text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-faint)] transition-colors focus:outline-none focus:border-[var(--color-line-strong)] focus:bg-[var(--color-surface)] focus:ring-2 focus:ring-[var(--color-coral)]/20";
 
 type SectionId =
-  "profile" | "team" | "nova" | "commerce" | "notifications" | "security";
+  | "appearance"
+  | "profile"
+  | "team"
+  | "nova"
+  | "commerce"
+  | "notifications"
+  | "security";
 
 const sections: { id: SectionId; label: string; icon: LucideIcon }[] = [
+  { id: "appearance", label: "Appearance & Themes", icon: Palette },
   { id: "profile", label: "Business Profile", icon: Building2 },
   { id: "team", label: "Team", icon: Users },
   { id: "nova", label: "NOVA Preferences", icon: Sparkles },
@@ -125,7 +134,8 @@ function SaveBar({ onSave }: { onSave: () => void }) {
 }
 
 export default function Settings() {
-  const [active, setActive] = useState<SectionId>("profile");
+  const { theme, setTheme } = useTheme();
+  const [active, setActive] = useState<SectionId>("appearance");
 
   const [profile, setProfile] = useState(() => {
     const saved =
@@ -310,6 +320,167 @@ export default function Settings() {
               exit={{ opacity: 0, y: -6 }}
               transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
             >
+              {active === "appearance" && (
+                <Card className="p-7 space-y-6">
+                  <div>
+                    <h2 className="font-serif text-2xl text-[var(--color-ink)]">
+                      Appearance & Visual Themes
+                    </h2>
+                    <p className="mt-1 text-sm text-[var(--color-ink-soft)]">
+                      Choose your preferred visual aesthetic. Changes apply instantly across the entire platform.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-5 pt-2">
+                    {THEME_CONFIGS.map((t) => {
+                      const isSelected = theme === t.id;
+                      return (
+                        <div
+                          key={t.id}
+                          onClick={() => setTheme(t.id)}
+                          className={cn(
+                            "rounded-2xl border-2 p-4 cursor-pointer transition-all duration-200 flex flex-col justify-between group",
+                            isSelected
+                              ? "border-[var(--color-coral)] ring-4 ring-[var(--color-coral)]/15 shadow-md scale-[1.01]"
+                              : "border-[var(--color-line)] hover:border-[var(--color-line-strong)] hover:shadow-sm",
+                          )}
+                          style={{ backgroundColor: "var(--color-surface)" }}
+                        >
+                          {/* Visual Mini Mockup Preview */}
+                          <div
+                            className="w-full h-32 rounded-xl p-2.5 flex flex-col justify-between border overflow-hidden relative mb-4 transition-transform group-hover:scale-[1.01]"
+                            style={{
+                              backgroundColor: t.previewBg,
+                              borderColor: t.previewBorder,
+                              boxShadow: t.id === "retro" ? "2px 2px 0px #000" : undefined,
+                            }}
+                          >
+                            {/* Mini App Header */}
+                            <div
+                              className="w-full h-4 rounded px-2 flex items-center justify-between border"
+                              style={{
+                                backgroundColor: t.previewCard,
+                                borderColor: t.previewBorder,
+                              }}
+                            >
+                              <div className="flex items-center gap-1">
+                                <div
+                                  className="w-1.5 h-1.5 rounded-full"
+                                  style={{ backgroundColor: t.previewAccent }}
+                                />
+                                <div
+                                  className="w-8 h-1 rounded"
+                                  style={{ backgroundColor: t.previewText, opacity: 0.7 }}
+                                />
+                              </div>
+                              <div
+                                className="w-3 h-1 rounded-full"
+                                style={{ backgroundColor: t.previewBorder }}
+                              />
+                            </div>
+
+                            {/* Mini Layout Mockup: Sidebar + Content */}
+                            <div className="flex gap-2 flex-1 mt-1.5 min-h-0">
+                              {/* Mini Sidebar */}
+                              <div
+                                className="w-1/4 h-full rounded border p-1 flex flex-col gap-1"
+                                style={{
+                                  backgroundColor: t.id === "retro" ? "#97ccaf" : t.previewCard,
+                                  borderColor: t.previewBorder,
+                                }}
+                              >
+                                <div
+                                  className="w-full h-1.5 rounded"
+                                  style={{ backgroundColor: t.id === "retro" ? "#000" : t.previewAccent }}
+                                />
+                                <div
+                                  className="w-3/4 h-1 rounded"
+                                  style={{ backgroundColor: t.previewText, opacity: 0.4 }}
+                                />
+                                <div
+                                  className="w-1/2 h-1 rounded"
+                                  style={{ backgroundColor: t.previewText, opacity: 0.3 }}
+                                />
+                              </div>
+
+                              {/* Mini Content Area */}
+                              <div className="flex-1 flex flex-col gap-1.5 min-h-0">
+                                <div
+                                  className="w-full h-9 rounded border p-1.5 flex items-center justify-between"
+                                  style={{
+                                    backgroundColor: t.previewCard,
+                                    borderColor: t.previewBorder,
+                                    boxShadow: t.id === "retro" ? "1.5px 1.5px 0px #000" : undefined,
+                                  }}
+                                >
+                                  <div className="space-y-0.5">
+                                    <div
+                                      className="w-10 h-1.5 rounded"
+                                      style={{ backgroundColor: t.previewText }}
+                                    />
+                                    <div
+                                      className="w-6 h-1 rounded"
+                                      style={{ backgroundColor: t.previewText, opacity: 0.4 }}
+                                    />
+                                  </div>
+                                  <div
+                                    className="px-1.5 py-0.5 rounded text-[8px] font-bold"
+                                    style={{
+                                      backgroundColor: t.previewAccent,
+                                      color: t.id === "retro" ? "#000" : "#fff",
+                                    }}
+                                  >
+                                    AI
+                                  </div>
+                                </div>
+
+                                <div
+                                  className="w-full h-6 rounded border p-1 flex items-center gap-1"
+                                  style={{
+                                    backgroundColor: t.previewCard,
+                                    borderColor: t.previewBorder,
+                                  }}
+                                >
+                                  <div
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: t.previewAccent }}
+                                  />
+                                  <div
+                                    className="w-12 h-1 rounded"
+                                    style={{ backgroundColor: t.previewText, opacity: 0.5 }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Theme Info & Selection Indicator */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-sm text-[var(--color-ink)]">
+                                {t.name}
+                              </span>
+                              {isSelected ? (
+                                <Badge tone="coral" className="py-0.5 px-2 text-[10px] font-bold">
+                                  <Check size={11} className="mr-0.5" /> Active
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-[var(--color-ink-faint)] group-hover:text-[var(--color-coral)] transition-colors">
+                                  Click to apply
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-xs leading-relaxed text-[var(--color-ink-soft)]">
+                              {t.description}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+
               {active === "profile" && (
                 <Card className="p-7 space-y-6">
                   <div>

@@ -198,40 +198,56 @@ export function BusinessContextModal({
     }
   }, [isOpen, session, workspaceId]);
 
+  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null);
+
   const handleRunAIAnalysis = async () => {
-    if (!naturalInput.trim() || !session || !workspaceId) return;
+    if (!naturalInput.trim()) return;
     setAnalyzing(true);
+    setAiSuccessMessage(null);
     try {
-      const res = await fetch("/api/business-context/analyze", {
+      const data = await fetchApi<any>("/api/business-context/analyze", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          "x-workspace-id": workspaceId,
-        },
-        body: JSON.stringify({ text: naturalInput }),
+        session,
+        workspaceId,
+        body: { text: naturalInput },
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.suggestions) {
-          const sug = data.suggestions;
-          setAiSuggestions(sug);
-          if (sug.suggestedIndustry) setIndustry(sug.suggestedIndustry);
-          if (sug.suggestedBusinessType)
-            setBusinessType(sug.suggestedBusinessType);
-          if (sug.suggestedBusinessSize)
-            setBusinessSize(sug.suggestedBusinessSize);
-          if (sug.suggestedOperatingScope)
-            setOperatingScope(sug.suggestedOperatingScope);
-          if (sug.suggestedProducts && sug.suggestedProducts.length)
-            setProducts(sug.suggestedProducts);
-          if (sug.suggestedTargetBuyers && sug.suggestedTargetBuyers.length)
-            setTargetBuyerProfiles(sug.suggestedTargetBuyers);
-          if (sug.suggestedPrimaryCity)
-            setPrimaryCity(sug.suggestedPrimaryCity);
-          setStepIndex(6); // Jump to Confirmation step
+      if (data && data.suggestions) {
+        const sug = data.suggestions;
+        setAiSuggestions(sug);
+        if (sug.suggestedCompany && !companyName) {
+          setCompanyName(sug.suggestedCompany);
         }
+        if (sug.suggestedIndustry) {
+          setIndustry(sug.suggestedIndustry);
+        }
+        if (sug.suggestedBusinessType) {
+          setBusinessType(sug.suggestedBusinessType);
+        }
+        if (sug.suggestedBusinessSize) {
+          setBusinessSize(sug.suggestedBusinessSize);
+        }
+        if (sug.suggestedOperatingScope) {
+          setOperatingScope(sug.suggestedOperatingScope);
+        }
+        if (sug.suggestedProducts && Array.isArray(sug.suggestedProducts) && sug.suggestedProducts.length) {
+          setProducts((prev) => {
+            const set = new Set([...prev, ...sug.suggestedProducts]);
+            return Array.from(set);
+          });
+        }
+        if (sug.suggestedTargetBuyers && Array.isArray(sug.suggestedTargetBuyers) && sug.suggestedTargetBuyers.length) {
+          setTargetBuyerProfiles((prev) => {
+            const set = new Set([...prev, ...sug.suggestedTargetBuyers]);
+            return Array.from(set);
+          });
+        }
+        if (sug.suggestedPrimaryCity) {
+          setPrimaryCity(sug.suggestedPrimaryCity);
+        }
+        setAiSuccessMessage(
+          `AI analyzed your description: ${sug.suggestedProducts?.length || 0} products & ${sug.suggestedTargetBuyers?.length || 0} buyer profiles configured!`,
+        );
       }
     } catch (err) {
       console.error("AI Analysis failed:", err);
@@ -241,7 +257,6 @@ export function BusinessContextModal({
   };
 
   const handleSaveConfirmed = async () => {
-    if (!session || !workspaceId) return;
     setSaving(true);
     try {
       const bodyPayload = {
@@ -267,24 +282,21 @@ export function BusinessContextModal({
         primaryGoals,
       };
 
-      const res = await fetch("/api/business-context", {
+      const data = await fetchApi<any>("/api/business-context", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          "x-workspace-id": workspaceId,
-        },
-        body: JSON.stringify(bodyPayload),
+        session,
+        workspaceId,
+        body: bodyPayload,
       });
 
-      if (res.ok) {
-        const updated = await res.json();
-        if (onProfileUpdated)
-          onProfileUpdated(updated.resolvedContext, updated.strategy);
+      if (data && data.success) {
+        if (onProfileUpdated) {
+          onProfileUpdated(data.resolvedContext, data.strategy);
+        }
         onClose();
       }
     } catch (err) {
-      console.error("Save failed:", err);
+      console.error("Save confirmed profile failed:", err);
     } finally {
       setSaving(false);
     }
@@ -385,24 +397,75 @@ export function BusinessContextModal({
               </div>
             </div>
 
+            {products.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-line)] space-y-1.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-[var(--color-ink)] flex items-center gap-1.5">
+                    <Sparkles size={13} className="text-[var(--color-coral)]" />
+                    AI Extracted Products & Commodities ({products.length}):
+                  </span>
+                  <span className="text-[10px] text-[var(--color-ink-faint)]">
+                    Ready for B2B buyer discovery
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {products.map((p, idx) => (
+                    <Badge
+                      key={idx}
+                      tone="coral"
+                      className="text-xs px-2.5 py-0.5 font-medium flex items-center gap-1"
+                    >
+                      <span>{p}</span>
+                    </Badge>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+
+            {aiSuccessMessage && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-2.5 rounded-lg bg-[var(--color-sage)]/10 border border-[var(--color-sage)]/30 text-xs font-medium text-[var(--color-sage)] flex items-center gap-2"
+              >
+                <Check size={14} className="shrink-0 font-bold text-[var(--color-sage)]" />
+                <span>{aiSuccessMessage}</span>
+              </motion.div>
+            )}
+
             <div className="flex items-center justify-between pt-3 border-t border-[var(--color-line)]">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleRunAIAnalysis}
                 disabled={analyzing || !naturalInput.trim()}
+                className="cursor-pointer"
               >
                 {analyzing ? (
-                  <Sparkles size={14} className="animate-spin mr-1.5" />
+                  <>
+                    <Sparkles size={14} className="animate-spin mr-1.5 text-[var(--color-coral)]" />
+                    Analyzing Description...
+                  </>
+                ) : aiSuccessMessage ? (
+                  <>
+                    <Check size={14} className="mr-1.5 text-[var(--color-sage)] font-bold" />
+                    Re-Analyze with AI
+                  </>
                 ) : (
-                  <Sparkles
-                    size={14}
-                    className="mr-1.5 text-[var(--color-gold)]"
-                  />
+                  <>
+                    <Sparkles
+                      size={14}
+                      className="mr-1.5 text-[var(--color-gold)]"
+                    />
+                    Analyze Description with AI
+                  </>
                 )}
-                Analyze Description with AI
               </Button>
-              <Button size="sm" onClick={() => setStepIndex(2)}>
+              <Button size="sm" onClick={() => setStepIndex(2)} className="cursor-pointer">
                 Next: Products <ArrowRight size={14} className="ml-1" />
               </Button>
             </div>
@@ -733,20 +796,46 @@ export function BusinessContextModal({
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
-                  <span className="text-[var(--color-ink-faint)] block">
-                    Industry:
-                  </span>
-                  <span className="font-medium text-[var(--color-ink)]">
-                    {industry || "General Commerce"}
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--color-ink-faint)] block">
+                      Industry:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStepIndex(1)}
+                      className="text-[10px] text-[var(--color-coral-ink)] hover:underline font-medium cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={industry}
+                    onChange={(e) => setIndustry(e.target.value)}
+                    placeholder="e.g. Food & Agriculture"
+                    className="w-full mt-0.5 px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-line)] text-xs text-[var(--color-ink)] font-medium"
+                  />
                 </div>
                 <div>
-                  <span className="text-[var(--color-ink-faint)] block">
-                    Operating City:
-                  </span>
-                  <span className="font-medium text-[var(--color-ink)]">
-                    {primaryCity || "Unconfigured"} ({localSearchRadius} km)
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[var(--color-ink-faint)] block">
+                      Operating City:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setStepIndex(4)}
+                      className="text-[10px] text-[var(--color-coral-ink)] hover:underline font-medium cursor-pointer"
+                    >
+                      Edit
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={primaryCity}
+                    onChange={(e) => setPrimaryCity(e.target.value)}
+                    placeholder="e.g. Ghaziabad, Uttar Pradesh, India"
+                    className="w-full mt-0.5 px-2 py-1 rounded bg-[var(--color-surface)] border border-[var(--color-line)] text-xs text-[var(--color-ink)] font-medium"
+                  />
                 </div>
               </div>
 

@@ -268,11 +268,15 @@ export function Modal({
   onClose,
   children,
   title,
+  className,
+  maxWidth = "lg",
 }: {
   open: boolean;
   onClose: () => void;
   children: React.ReactNode;
   title?: string;
+  className?: string;
+  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl";
 }) {
   useEffect(() => {
     if (!open) return;
@@ -285,6 +289,16 @@ export function Modal({
 
   if (typeof document === "undefined") return null;
 
+  const maxWidthClass = {
+    sm: "max-w-sm",
+    md: "max-w-md",
+    lg: "max-w-lg",
+    xl: "max-w-xl",
+    "2xl": "max-w-2xl",
+    "3xl": "max-w-3xl",
+    "4xl": "max-w-4xl",
+  }[maxWidth];
+
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -294,23 +308,27 @@ export function Modal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/15 cursor-pointer"
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.98, y: 8 }}
             transition={{ type: "spring", stiffness: 400, damping: 32 }}
-            className="relative w-full max-w-lg bg-[var(--color-surface)] rounded-[var(--radius-xl)] shadow-2xl border border-[var(--color-line)] p-7 max-h-[85vh] overflow-y-auto z-10"
+            className={cn(
+              "relative w-full bg-[var(--color-surface)] rounded-[var(--radius-xl)] shadow-2xl border border-[var(--color-line)] p-6 sm:p-7 max-h-[88vh] overflow-y-auto overflow-x-hidden z-10",
+              maxWidthClass,
+              className,
+            )}
           >
             {title && (
-              <div className="flex items-center justify-between mb-5">
-                <h3 className="font-serif text-2xl text-[var(--color-ink)]">
+              <div className="flex items-center justify-between mb-5 pb-2 border-b border-[var(--color-line)]/50">
+                <h3 className="font-serif text-2xl text-[var(--color-ink)] font-bold">
                   {title}
                 </h3>
                 <button
                   onClick={onClose}
-                  className="p-1.5 rounded-full hover:bg-[var(--color-bg-sunk)] text-[var(--color-ink-faint)] cursor-pointer"
+                  className="p-1.5 rounded-full hover:bg-[var(--color-bg-sunk)] text-[var(--color-ink-faint)] hover:text-[var(--color-ink)] transition-colors cursor-pointer"
                 >
                   <X size={18} />
                 </button>

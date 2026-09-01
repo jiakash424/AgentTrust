@@ -8,9 +8,12 @@ import {
   CheckCircle2,
   ShieldCheck,
   Sparkles,
+  Palette,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
+import { cn } from "../lib/cn";
 import { merchant } from "../lib/data";
 
 interface UserProfileDropdownProps {
@@ -23,6 +26,7 @@ export function UserProfileDropdown({
   onClose,
 }: UserProfileDropdownProps) {
   const { user, signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
 
   const userEmail = user?.email || "admin@company.com";
@@ -118,6 +122,40 @@ export function UserProfileDropdown({
               <Sparkles size={15} />
               <span>Growth Intelligence</span>
             </button>
+            <button
+              onClick={() => {
+                onClose();
+                window.dispatchEvent(new CustomEvent("openOnboardingTour"));
+              }}
+              className="w-full flex items-center gap-3 px-3 py-2 rounded-[var(--radius-sm)] text-xs text-[var(--color-coral-ink)] font-semibold hover:bg-[var(--color-coral-soft)] transition-colors cursor-pointer"
+            >
+              <Sparkles size={15} className="text-[var(--color-coral)]" />
+              <span>App Guide & Tour (कैसे use karein)</span>
+            </button>
+
+            {/* Quick Theme Switcher */}
+            <div className="px-3 py-2.5 my-1 rounded-[var(--radius-sm)] bg-[var(--color-bg-sunk)] border border-[var(--color-line)]">
+              <div className="text-[10px] font-mono text-[var(--color-ink-faint)] uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                <Palette size={11} className="text-[var(--color-coral)]" />
+                Theme
+              </div>
+              <div className="grid grid-cols-3 gap-1">
+                {(["agenttrust", "dark", "retro"] as const).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setTheme(t)}
+                    className={cn(
+                      "py-1 px-1.5 rounded text-[10px] font-medium transition-all text-center capitalize cursor-pointer",
+                      theme === t
+                        ? "bg-[var(--color-surface)] text-[var(--color-ink)] font-bold shadow-xs border border-[var(--color-line-strong)]"
+                        : "text-[var(--color-ink-soft)] hover:text-[var(--color-ink)] hover:bg-[var(--color-surface)]/50",
+                    )}
+                  >
+                    {t === "agenttrust" ? "Light" : t}
+                  </button>
+                ))}
+              </div>
+            </div>
 
             <div className="my-1 border-t border-[var(--color-line)]" />
 

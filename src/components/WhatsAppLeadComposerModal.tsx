@@ -8,9 +8,9 @@ import {
   Phone,
   AlertCircle,
   MessageSquare,
-  Edit3,
 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
+import { cn } from "../lib/cn";
 
 interface WhatsAppComposerModalProps {
   isOpen: boolean;
@@ -43,12 +43,24 @@ export function WhatsAppLeadComposerModal({
   const [statusStep, setStatusStep] = useState<
     "DRAFT" | "PENDING_APPROVAL" | "SENT" | "ERROR"
   >("DRAFT");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const phoneOptions = (lead?.phone || "")
+    .split(/[,/|]/)
+    .map((p) => p.trim())
+    .filter(Boolean);
 
   useEffect(() => {
     if (lead) {
-      setRecipientPhone(lead.phone || "");
+      const phones = (lead.phone || "")
+        .split(/[,/|]/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+      setRecipientPhone(phones[0] || lead.phone || "");
       setRecipientName(lead.name || "Client");
       setCompanyName(lead.companyName || lead.name || "Enterprise");
+      setStatusStep("DRAFT");
+      setErrorMessage("");
     }
   }, [lead]);
 
@@ -88,6 +100,7 @@ export function WhatsAppLeadComposerModal({
     if (!content.trim() || !recipientPhone.trim() || !session || !workspaceId)
       return;
     setSubmitting(true);
+    setErrorMessage("");
     try {
       // 1. Create message draft/pending approval
       const createRes = await fetch("/api/whatsapp/messages", {
@@ -105,13 +118,17 @@ export function WhatsAppLeadComposerModal({
         }),
       });
 
-      if (!createRes.ok) throw new Error("Failed to create WhatsApp message");
+      if (!createRes.ok) {
+        const errData = await createRes.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to create WhatsApp message");
+      }
       const createdData = await createRes.json();
       const msgId = createdData.message?.id;
 
       if (submitForApprovalOnly) {
         setStatusStep("PENDING_APPROVAL");
         if (onMessageSent) onMessageSent();
+        setTimeout(() => onClose(), 1600);
         return;
       }
 
@@ -132,10 +149,13 @@ export function WhatsAppLeadComposerModal({
         if (onMessageSent) onMessageSent();
         setTimeout(() => onClose(), 1500);
       } else {
+        const errData = await approveRes.json().catch(() => ({}));
+        setErrorMessage(errData.error || "Failed to transmit via WhatsApp API");
         setStatusStep("ERROR");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Transmit error:", err);
+      setErrorMessage(err.message || "Failed to submit message");
       setStatusStep("ERROR");
     } finally {
       setSubmitting(false);
@@ -166,7 +186,7 @@ export function WhatsAppLeadComposerModal({
         </div>
 
         {/* Recipient Bar */}
-        <div className="grid grid-cols-2 gap-3 p-3 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-line)] text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-[var(--color-surface-2)] border border-[var(--color-line)] text-xs">
           <div>
             <span className="text-[var(--color-ink-faint)] block mb-0.5 font-mono">
               Recipient Name & Company:
@@ -179,10 +199,30 @@ export function WhatsAppLeadComposerModal({
             <span className="text-[var(--color-ink-faint)] block mb-0.5 font-mono">
               WhatsApp Phone Number:
             </span>
-            <div className="flex items-center gap-1.5 font-mono text-[var(--color-coral)] font-bold">
-              <Phone size={12} />
-              {recipientPhone || "Missing Phone Number"}
-            </div>
+            {phoneOptions.length > 1 ? (
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {phoneOptions.map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setRecipientPhone(num)}
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[11px] font-mono transition-colors cursor-pointer",
+                      recipientPhone === num
+                        ? "bg-emerald-600 text-white font-bold"
+                        : "bg-[var(--color-bg-sunk)] text-[var(--color-ink)] hover:bg-[var(--color-surface)] border border-[var(--color-line)]",
+                    )}
+                  >
+                    {num}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 font-mono text-[var(--color-coral)] font-bold">
+                <Phone size={12} />
+                {recipientPhone || "Missing Phone Number"}
+              </div>
+            )}
           </div>
         </div>
 
@@ -240,22 +280,32 @@ export function WhatsAppLeadComposerModal({
           <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-600 dark:text-amber-300 flex items-center gap-2">
             <ShieldCheck size={16} />
             <span className="font-semibold">
-              Draft submitted for Manager Approval!
+              Draft submitted for Manager Approval! View in Approvals tab.
+            </span>
+          </div>
+        )}
+
+        {statusStep === "ERROR" && (
+          <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-xs text-rose-600 dark:text-rose-300 flex items-center gap-2">
+            <AlertCircle size={16} />
+            <span className="font-semibold">
+              {errorMessage || "Failed to transmit message. Please verify configuration."}
             </span>
           </div>
         )}
 
         {/* Actions */}
-        <div className="flex items-center justify-between pt-3 border-t border-[var(--color-line)]">
-          <Button variant="ghost" size="sm" onClick={onClose}>
+        <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-3 pt-3 border-t border-[var(--color-line)]">
+          <Button variant="ghost" size="sm" onClick={onClose} className="whitespace-nowrap">
             Cancel
           </Button>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
               size="sm"
               onClick={() => handleCreateAndSend(true)}
               disabled={submitting || !content.trim()}
+              className="whitespace-nowrap text-xs"
             >
               Submit for Approval
             </Button>
@@ -263,7 +313,7 @@ export function WhatsAppLeadComposerModal({
               size="sm"
               onClick={() => handleCreateAndSend(false)}
               disabled={submitting || !content.trim() || !recipientPhone.trim()}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white border-none"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white border-none whitespace-nowrap text-xs shadow-xs"
             >
               {submitting ? (
                 "Sending..."

@@ -164,27 +164,29 @@ export async function requireAuth(
     }
   }
 
-  // 2. Unique Client Token Workspace Resolution
-  try {
-    let workspace = null;
+  // 2. Unique Client Token / Explicit Workspace Resolution
+  if (requestedWorkspaceId || authHeader || req.headers["x-client-token"]) {
+    try {
+      let workspace = null;
 
-    if (requestedWorkspaceId) {
-      workspace = await prisma.workspace.findUnique({
-        where: { id: requestedWorkspaceId },
-      });
-    }
+      if (requestedWorkspaceId) {
+        workspace = await prisma.workspace.findUnique({
+          where: { id: requestedWorkspaceId },
+        });
+      }
 
-    if (!workspace) {
-      workspace = await prisma.workspace.findFirst();
-    }
+      if (!workspace && (authHeader || req.headers["x-client-token"])) {
+        workspace = await prisma.workspace.findFirst();
+      }
 
-    if (workspace) {
-      req.workspaceId = workspace.id;
-      req.user = { sub: clientToken, email: `${clientToken}@agenttrust.ai` };
-      return next();
+      if (workspace) {
+        req.workspaceId = workspace.id;
+        req.user = { sub: clientToken, email: `${clientToken}@agenttrust.ai` };
+        return next();
+      }
+    } catch (fallbackErr) {
+      console.error("[requireAuth] Workspace resolution error:", fallbackErr);
     }
-  } catch (fallbackErr) {
-    console.error("[requireAuth] Workspace resolution error:", fallbackErr);
   }
 
   res.status(401).json({ error: "Invalid or missing token" });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { GeminiProvider } from "./gemini";
 import { NvidiaNimProvider } from "./nvidia";
+import { OpenRouterProvider } from "./openrouter";
 
 export interface AIProvider {
   chat(messages: any[], tools?: any[]): Promise<any>;
@@ -18,12 +19,12 @@ export interface ProviderTelemetry {
   lastError: string | null;
 }
 
-// Global queue manager to throttle Gemini requests to 1 request at a time with 1s delay
+// Global queue manager to throttle Gemini requests to 1 request at a time with 100ms delay
 class AIQueueManager {
   private geminiQueue: Array<() => Promise<void>> = [];
   private isProcessingGemini = false;
   private lastGeminiTime = 0;
-  private minGeminiIntervalMs = 1000;
+  private minGeminiIntervalMs = 100;
 
   async enqueueGemini<T>(task: () => Promise<T>): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -65,45 +66,50 @@ class AIQueueManager {
 export const aiQueue = new AIQueueManager();
 
 export class ResilientAIProvider implements AIProvider {
-  private primary: AIProvider;
-  private fallback: AIProvider | null = null;
-  private primaryName = "NVIDIA";
-  private fallbackName = "Gemini";
-  private primaryModel =
-    process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b";
-  private fallbackModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-
+  private providers: Array<{ name: string; model: string; instance: AIProvider }> = [];
   public telemetry: ProviderTelemetry;
 
   constructor() {
-    const primaryType = (process.env.AI_PROVIDER || "nvidia").toLowerCase();
-
-    if (primaryType === "gemini") {
-      this.primaryName = "Gemini";
-      this.fallbackName = "NVIDIA";
-      this.primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-      this.fallbackModel =
-        process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b";
-      this.primary = new GeminiProvider();
-      if (process.env.NVIDIA_API_KEY) {
-        this.fallback = new NvidiaNimProvider();
-      }
-    } else {
-      // DEFAULT PRIMARY: NVIDIA NIM (nemotron-3-super-120b-a12b)
-      this.primaryName = "NVIDIA";
-      this.fallbackName = "Gemini";
-      this.primaryModel =
-        process.env.NVIDIA_MODEL || "nvidia/nemotron-3-super-120b-a12b";
-      this.fallbackModel = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-      this.primary = new NvidiaNimProvider();
-      if (process.env.GEMINI_API_KEY) {
-        this.fallback = new GeminiProvider();
-      }
+    // 1. Configure OpenRouter (Fastest + GLM support)
+    if (process.env.OPENROUTER_API_KEY) {
+      this.providers.push({
+        name: "OpenRouter",
+        model: process.env.OPENROUTER_MODEL || "z-ai/glm-5.2",
+        instance: new OpenRouterProvider(),
+      });
     }
 
+    // 2. Configure Gemini Flash Lite
+    if (process.env.GEMINI_API_KEY) {
+      this.providers.push({
+        name: "Gemini",
+        model: process.env.GEMINI_MODEL || "gemini-2.5-flash-lite",
+        instance: new GeminiProvider(),
+      });
+    }
+
+    // 3. Configure NVIDIA NIM
+    if (process.env.NVIDIA_API_KEY) {
+      this.providers.push({
+        name: "NVIDIA",
+        model: process.env.NVIDIA_MODEL || "meta/llama-3.3-70b-instruct",
+        instance: new NvidiaNimProvider(),
+      });
+    }
+
+    // If no providers loaded, fallback to default OpenRouter
+    if (this.providers.length === 0) {
+      this.providers.push({
+        name: "OpenRouter",
+        model: "z-ai/glm-5.2",
+        instance: new OpenRouterProvider(),
+      });
+    }
+
+    const primary = this.providers[0];
     this.telemetry = {
-      provider: this.primaryName,
-      model: this.primaryModel,
+      provider: primary.name,
+      model: primary.model,
       requestCount: 0,
       successfulRequests: 0,
       rateLimitCount: 0,
@@ -114,107 +120,58 @@ export class ResilientAIProvider implements AIProvider {
 
   async chat(messages: any[], tools?: any[]): Promise<any> {
     this.telemetry.requestCount++;
+    let lastError: any = null;
 
-    // Try primary provider with 3 max retries & backoff
-    let attempts = 0;
-    while (attempts < 3) {
+    for (let i = 0; i < this.providers.length; i++) {
+      const p = this.providers[i];
       try {
-        const res = await this.executeProviderCall(this.primaryName, () =>
-          this.primary.chat(messages, tools),
+        const res = await this.executeProviderCall(p.name, () =>
+          p.instance.chat(messages, tools),
         );
         this.telemetry.successfulRequests++;
+        this.telemetry.provider = p.name;
+        this.telemetry.model = p.model;
         return res;
       } catch (err: any) {
-        attempts++;
-        if (this.isRateLimitOrQuotaError(err)) {
-          this.telemetry.rateLimitCount++;
-          this.telemetry.lastError = err.message;
-          console.warn(
-            `[${this.primaryName}] Rate limit hit (attempt ${attempts}/3).`,
-          );
-
-          if (this.fallback && attempts >= 1) {
-            this.telemetry.fallbackCount++;
-            this.telemetry.provider = this.fallbackName;
-            this.telemetry.model = this.fallbackModel;
-            console.warn(
-              `[AI Failover] Shifting from ${this.primaryName} to ${this.fallbackName}...`,
-            );
-
-            try {
-              const fallbackRes = await this.executeProviderCall(
-                this.fallbackName,
-                () => this.fallback!.chat(messages, tools),
-              );
-              this.telemetry.successfulRequests++;
-              return fallbackRes;
-            } catch (fallbackErr: any) {
-              this.telemetry.lastError = fallbackErr.message;
-              throw fallbackErr;
-            }
-          }
-        } else {
-          this.telemetry.lastError = err.message;
-          if (attempts >= 3) throw err;
-        }
-
-        // Exponential backoff
-        await new Promise((r) => setTimeout(r, attempts * 1000));
+        lastError = err;
+        this.telemetry.lastError = err.message;
+        this.telemetry.fallbackCount++;
+        console.warn(
+          `[AI Resilience] ${p.name} failed: ${err.message}. Shifting to next high-performance tier...`,
+        );
       }
     }
+
+    throw lastError || new Error("All AI providers failed.");
   }
 
   async structured<T>(messages: any[], schema: z.ZodSchema<T>): Promise<T> {
     this.telemetry.requestCount++;
+    let lastError: any = null;
 
-    let attempts = 0;
-    while (attempts < 3) {
+    for (let i = 0; i < this.providers.length; i++) {
+      const p = this.providers[i];
       try {
-        const res = await this.executeProviderCall(this.primaryName, () =>
-          this.primary.structured(messages, schema),
+        const res = await this.executeProviderCall(p.name, () =>
+          p.instance.structured(messages, schema),
         );
         this.telemetry.successfulRequests++;
+        this.telemetry.provider = p.name;
+        this.telemetry.model = p.model;
         return res;
       } catch (err: any) {
-        attempts++;
-        if (this.isRateLimitOrQuotaError(err)) {
-          this.telemetry.rateLimitCount++;
-          this.telemetry.lastError = err.message;
-          console.warn(
-            `[${this.primaryName}] Rate limit hit during structured() (attempt ${attempts}/3).`,
-          );
-
-          if (this.fallback && attempts >= 1) {
-            this.telemetry.fallbackCount++;
-            this.telemetry.provider = this.fallbackName;
-            this.telemetry.model = this.fallbackModel;
-            console.warn(
-              `[AI Failover] Shifting structured() from ${this.primaryName} to ${this.fallbackName}...`,
-            );
-
-            try {
-              const fallbackRes = await this.executeProviderCall(
-                this.fallbackName,
-                () => this.fallback!.structured(messages, schema),
-              );
-              this.telemetry.successfulRequests++;
-              return fallbackRes;
-            } catch (fallbackErr: any) {
-              this.telemetry.lastError = fallbackErr.message;
-              throw fallbackErr;
-            }
-          }
-        } else {
-          this.telemetry.lastError = err.message;
-          if (attempts >= 3) throw err;
-        }
-
-        await new Promise((r) => setTimeout(r, attempts * 1000));
+        lastError = err;
+        this.telemetry.lastError = err.message;
+        this.telemetry.fallbackCount++;
+        console.warn(
+          `[AI Resilience] ${p.name} structured() failed: ${err.message}. Shifting to next tier...`,
+        );
       }
     }
 
-    throw new Error(
-      `AI_PROVIDER_ERROR: ${this.telemetry.lastError || "Execution failed"}`,
+    throw (
+      lastError ||
+      new Error("All AI providers failed during structured output.")
     );
   }
 
@@ -229,10 +186,14 @@ export class ResilientAIProvider implements AIProvider {
   }
 
   async healthCheck(): Promise<{ ok: boolean; model: string; error?: string }> {
-    if (this.primary.healthCheck) {
-      return await this.primary.healthCheck();
+    const primary = this.providers[0];
+    if (!primary) {
+      return { ok: false, model: "none", error: "No providers configured" };
     }
-    return { ok: true, model: this.primaryModel };
+    if (primary.instance.healthCheck) {
+      return await primary.instance.healthCheck();
+    }
+    return { ok: true, model: primary.model };
   }
 
   private isRateLimitOrQuotaError(err: any): boolean {

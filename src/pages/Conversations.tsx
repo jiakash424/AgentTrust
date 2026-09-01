@@ -26,31 +26,38 @@ export default function Conversations() {
   // Active selected thread for detail view
   const [selectedConv, setSelectedConv] = useState<any | null>(null);
   const [simulatingReply, setSimulatingReply] = useState(false);
+  const [sellerMessageText, setSellerMessageText] = useState("");
   const [replyText, setReplyText] = useState(
-    "We are interested in 100 units, but can you offer ₹11,000 per unit?",
+    "We are interested in 250 quintals, but can you offer ₹5,200 per quintal?",
   );
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (isInitial = false) => {
     if (!session || !workspaceId) return;
-    setLoading(true);
+    if (isInitial) setLoading(true);
     setError(null);
     try {
       const data = await fetchApi<{ conversations: any[] }>(
         "/api/conversations",
         { session, workspaceId },
       );
-      setConversations(data.conversations || []);
+      const list = data.conversations || [];
+      setConversations(list);
+      setSelectedConv((prev: any) => {
+        if (!prev) return list[0] || null;
+        const matched = list.find((c) => c.id === prev.id);
+        return matched ? { ...matched, messages: matched.messages || prev.messages } : prev;
+      });
     } catch (err: any) {
       setError(err.message || "Failed to load conversations");
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchConversations();
+    fetchConversations(true);
 
-    const handleUpdate = () => fetchConversations();
+    const handleUpdate = () => fetchConversations(false);
     window.addEventListener("conversationsUpdated", handleUpdate);
     window.addEventListener("opportunitiesUpdated", handleUpdate);
     return () => {
@@ -69,7 +76,7 @@ export default function Conversations() {
         session,
         workspaceId,
       });
-      await fetchConversations();
+      await fetchConversations(false);
     } catch (err: any) {
       setError(err.message || "Failed to sync replies");
     } finally {
@@ -81,12 +88,47 @@ export default function Conversations() {
     convId: string,
     customMessage?: string,
   ) => {
-    if (!session || !workspaceId) return;
+    if (!session || !workspaceId || !selectedConv) return;
+    const textToUse = customMessage || replyText;
+    if (!textToUse.trim()) return;
+
     setSimulatingReply(true);
     setError(null);
+
+    // 1. Optimistically append inbound user message & thinking badge immediately
+    const tempInboundMsg = {
+      id: `temp_in_${Date.now()}`,
+      direction: "INBOUND",
+      role: "user",
+      isSimulated: true,
+      content: textToUse,
+      createdAt: new Date().toISOString(),
+    };
+
+    const tempThinkingMsg = {
+      id: `temp_asst_${Date.now()}`,
+      direction: "OUTBOUND",
+      role: "assistant",
+      content: "⚡ NOVA is analyzing buyer counteroffer & calculating optimal pricing strategy...",
+      metadata: { negotiationAnalysis: true },
+      createdAt: new Date().toISOString(),
+    };
+
+    setSelectedConv((prev: any) =>
+      prev
+        ? {
+            ...prev,
+            messages: [
+              ...(prev.messages || []),
+              tempInboundMsg,
+              tempThinkingMsg,
+            ],
+          }
+        : prev,
+    );
+
     try {
-      const textToUse = customMessage || replyText;
-      const res = await fetchApi<any>(`/api/conversations/${convId}/reply`, {
+      await fetchApi<any>(`/api/conversations/${convId}/reply`, {
         method: "POST",
         session,
         workspaceId,
@@ -96,20 +138,98 @@ export default function Conversations() {
         },
       });
 
-      // Refresh conversations list & updated detail view
-      await fetchConversations();
-
-      // Refetch current conversation details
+      // Refetch current conversation details without unmounting
       const updatedDetail = await fetchApi<any>(
         `/api/conversations/${convId}`,
         { session, workspaceId },
       );
       setSelectedConv(updatedDetail);
+      fetchConversations(false);
       window.dispatchEvent(new Event("dealsUpdated"));
     } catch (err: any) {
       setError(err.message || "Failed to simulate buyer reply");
+      const freshDetail = await fetchApi<any>(
+        `/api/conversations/${convId}`,
+        { session, workspaceId },
+      ).catch(() => null);
+      if (freshDetail) setSelectedConv(freshDetail);
     } finally {
       setSimulatingReply(false);
+    }
+  };
+
+  const handleApproveAndSend = async (responseText?: string) => {
+    if (!session || !workspaceId || !selectedConv) return;
+    const textToSend =
+      responseText ||
+      selectedConv.messages?.find(
+        (m: any) => m.metadata?.negotiationAnalysis?.draftResponse,
+      )?.metadata?.negotiationAnalysis?.draftResponse ||
+      "Thank you for your prompt response. We accept your terms and look forward to dispatching the consignment.";
+
+    // Optimistically append sent outbound message immediately
+    const tempOutbound = {
+      id: `temp_out_${Date.now()}`,
+      direction: "OUTBOUND",
+      role: "assistant",
+      content: textToSend,
+      metadata: { status: "SENT", approvedAt: new Date().toISOString() },
+      createdAt: new Date().toISOString(),
+    };
+
+    setSelectedConv((prev: any) =>
+      prev
+        ? {
+            ...prev,
+            messages: [...(prev.messages || []), tempOutbound],
+          }
+        : prev,
+    );
+
+    try {
+      await fetchApi(`/api/conversations/${selectedConv.id}/messages`, {
+        method: "POST",
+        session,
+        workspaceId,
+        body: {
+          role: "assistant",
+          direction: "OUTBOUND",
+          content: textToSend,
+          metadata: {
+            approvedAt: new Date().toISOString(),
+            status: "SENT",
+          },
+        },
+      });
+
+      const updatedDetail = await fetchApi<any>(
+        `/api/conversations/${selectedConv.id}`,
+        { session, workspaceId },
+      );
+      setSelectedConv(updatedDetail);
+      fetchConversations(false);
+      window.dispatchEvent(new Event("dealsUpdated"));
+    } catch (err: any) {
+      setError(err.message || "Failed to send counteroffer");
+    }
+  };
+
+  const handleSendSellerMessage = async () => {
+    if (!sellerMessageText.trim() || !selectedConv) return;
+    const textToSend = sellerMessageText.trim();
+    setSellerMessageText("");
+    await handleApproveAndSend(textToSend);
+  };
+
+  const handleEditResponse = (responseText?: string) => {
+    const textToEdit =
+      responseText ||
+      selectedConv?.messages?.find(
+        (m: any) => m.metadata?.negotiationAnalysis?.draftResponse,
+      )?.metadata?.negotiationAnalysis?.draftResponse ||
+      "";
+    if (textToEdit) {
+      setSellerMessageText(textToEdit);
     }
   };
 
@@ -133,7 +253,7 @@ export default function Conversations() {
         </div>
       )}
 
-      {loading ? (
+      {loading && conversations.length === 0 ? (
         <Card className="p-12 text-center">
           <p className="font-serif text-xl text-[var(--color-ink)]">
             Loading active conversation threads...
@@ -352,6 +472,28 @@ export default function Conversations() {
                             <FormattedChatMessage
                               content={msg.content}
                               payload={msg.metadata}
+                              onActionClick={(action, actPayload) => {
+                                if (
+                                  action === "send_counteroffer" ||
+                                  action === "approve_counteroffer" ||
+                                  action === "send_email_now" ||
+                                  action?.includes("approve") ||
+                                  action?.includes("send")
+                                ) {
+                                  const draftText =
+                                    actPayload?.responseText ||
+                                    msg.metadata?.negotiationAnalysis?.draftResponse;
+                                  handleApproveAndSend(draftText);
+                                } else if (
+                                  action === "edit_counteroffer" ||
+                                  action?.includes("edit")
+                                ) {
+                                  const draftText =
+                                    actPayload?.responseText ||
+                                    msg.metadata?.negotiationAnalysis?.draftResponse;
+                                  handleEditResponse(draftText);
+                                }
+                              }}
                             />
                           ) : (
                             msg.content
@@ -362,24 +504,106 @@ export default function Conversations() {
                   })}
                 </div>
 
-                {/* Custom Test Reply Prompt Input */}
-                <div className="pt-4 border-t border-[var(--color-line)] space-y-3">
-                  <label className="text-xs font-semibold text-[var(--color-ink-faint)] uppercase tracking-wider block">
-                    Test Buyer Reply Simulation:
-                  </label>
+                {/* 1. REAL SELLER OUTBOUND MESSAGE COMPOSER */}
+                <div className="pt-4 border-t border-[var(--color-line)] space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-[var(--color-ink)] uppercase tracking-wider flex items-center gap-1.5">
+                      <Send size={13} className="text-[var(--color-coral)]" /> Send Response to Buyer (As Seller):
+                    </label>
+                    <span className="text-[11px] text-[var(--color-ink-faint)]">
+                      Outbound Official Channel
+                    </span>
+                  </div>
                   <div className="flex gap-2">
                     <input
-                      value={replyText}
-                      onChange={(e) => setReplyText(e.target.value)}
-                      placeholder="Type a buyer counteroffer or question..."
-                      className="flex-1 text-xs border border-[var(--color-line)] rounded-[var(--radius-md)] p-2.5 bg-[var(--color-surface)] text-[var(--color-ink)]"
+                      value={sellerMessageText}
+                      onChange={(e) => setSellerMessageText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleSendSellerMessage();
+                        }
+                      }}
+                      placeholder="Type your message, counteroffer, or quotation to buyer..."
+                      className="flex-1 text-sm border border-[var(--color-line)] rounded-[var(--radius-md)] p-2.5 bg-[var(--color-surface)] text-[var(--color-ink)] focus:outline-none focus:border-[var(--color-coral)] shadow-xs"
                     />
                     <Button
                       size="sm"
+                      className="bg-[var(--color-coral)] hover:opacity-90 text-white font-semibold px-4 cursor-pointer gap-1.5"
+                      onClick={handleSendSellerMessage}
+                      disabled={!sellerMessageText.trim()}
+                    >
+                      <Send size={14} /> Send Outbound
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 2. DEMO BUYER SIMULATION TEST TOOL (Clearly marked) */}
+                <div className="p-3.5 rounded-xl border border-dashed border-[var(--color-line-strong)] bg-[var(--color-surface-2)]/60 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-[var(--color-ink-soft)] uppercase tracking-wider flex items-center gap-1.5">
+                      <Zap size={13} className="text-amber-500" /> Demo Simulator: Test What Buyer Replies
+                    </span>
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-600 border border-amber-500/20">
+                      Testing Tool
+                    </span>
+                  </div>
+
+                  {/* Preset quick test chips */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-[11px] text-[var(--color-ink-faint)] mr-1">Quick Scenarios:</span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSimulateReply(
+                          selectedConv.id,
+                          "We are interested in 250 quintals, but can you offer ₹5,200 per quintal?",
+                        )
+                      }
+                      className="text-[11px] px-2.5 py-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-line)] hover:border-[var(--color-coral)] text-[var(--color-ink)] cursor-pointer transition-colors"
+                    >
+                      🏷️ Counter ₹5,200/Qtl
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSimulateReply(
+                          selectedConv.id,
+                          "We accept your proposed terms and pricing! Please send the dispatch agreement and invoice.",
+                        )
+                      }
+                      className="text-[11px] px-2.5 py-1 rounded-md bg-[var(--color-surface)] border border-emerald-500/40 hover:bg-emerald-50 text-emerald-800 dark:text-emerald-300 cursor-pointer transition-colors"
+                    >
+                      🤝 Accept & Request Invoice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleSimulateReply(
+                          selectedConv.id,
+                          "What is your moisture percentage and can you deliver by this Friday?",
+                        )
+                      }
+                      className="text-[11px] px-2.5 py-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-line)] hover:border-[var(--color-coral)] text-[var(--color-ink)] cursor-pointer transition-colors"
+                    >
+                      🚚 Quality & Delivery Query
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2 pt-1">
+                    <input
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="Type custom simulated message FROM buyer..."
+                      className="flex-1 text-xs border border-[var(--color-line)] rounded-[var(--radius-md)] p-2 bg-[var(--color-surface)] text-[var(--color-ink)]"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
                       disabled={simulatingReply}
                       onClick={() => handleSimulateReply(selectedConv.id)}
+                      className="text-xs cursor-pointer"
                     >
-                      <Send size={14} /> Send Reply
+                      <Zap size={13} className="text-amber-500" /> Simulate Inbound
                     </Button>
                   </div>
                 </div>

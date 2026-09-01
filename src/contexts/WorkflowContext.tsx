@@ -211,10 +211,16 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
             setWorkflowStatus("COMPLETED");
             setActiveStatus({
               title: "Completed",
-              subtitle: "All qualified entities saved",
+              subtitle: "Reasoning loop finished",
             });
-            if (payload.details?.finalAnswer || payload.stepName) {
-              setFinalAnswer(payload.details?.finalAnswer || payload.stepName);
+            const answer =
+              payload.details?.finalAnswer ||
+              (payload.stepName && payload.stepName.length > 50
+                ? payload.stepName
+                : null);
+            if (answer) {
+              setFinalAnswer(answer);
+              localStorage.setItem("nova_active_wf_answer", answer);
             }
             window.dispatchEvent(new Event("opportunitiesUpdated"));
             if (es) {
@@ -271,6 +277,7 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
               });
               if (data.finalAnswer) {
                 setFinalAnswer(data.finalAnswer);
+                localStorage.setItem("nova_active_wf_answer", data.finalAnswer);
               }
               window.dispatchEvent(new Event("opportunitiesUpdated"));
               if (es) {
@@ -307,6 +314,15 @@ export function WorkflowProvider({ children }: { children: React.ReactNode }) {
   const startBackgroundWorkflow = async (
     prompt: string,
   ): Promise<string | null> => {
+    // Idempotency: If workflow is already RUNNING with the exact same prompt, do not spawn another
+    if (
+      workflowStatus === "RUNNING" &&
+      workflowPrompt === prompt &&
+      activeWorkflowId
+    ) {
+      return activeWorkflowId;
+    }
+
     const activeWs =
       workspaceId || localStorage.getItem("nova_active_workspace") || "";
 

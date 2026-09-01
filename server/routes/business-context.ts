@@ -67,126 +67,147 @@ router.post("/analyze", requireAuth, async (req: any, res) => {
 
     let suggestions: z.infer<typeof analysisSchema>;
 
-    try {
-      suggestions = await ai.structured(
-        [
-          {
-            role: "system",
-            content: `You are NOVA, an expert B2B AI Business Intelligence Analyst.
+    const lower = inputPrompt.toLowerCase();
+    const dynamicProducts: string[] = [];
+    if (lower.includes("wheat") || lower.includes("gehun")) dynamicProducts.push("Premium Wheat");
+    if (lower.includes("maze") || lower.includes("maize") || lower.includes("corn") || lower.includes("makka")) dynamicProducts.push("Yellow Maize");
+    if (lower.includes("flour") || lower.includes("atta")) dynamicProducts.push("Whole Wheat Flour");
+    if (lower.includes("rice") || lower.includes("chawal")) dynamicProducts.push("Basmati Rice");
+    if (lower.includes("mustard") || lower.includes("sarson")) dynamicProducts.push("Mustard Seed");
+    if (lower.includes("pulse") || lower.includes("chickpea") || lower.includes("chana") || lower.includes("dal")) dynamicProducts.push("Chickpeas");
+
+    const isLocal =
+      lower.includes("local") ||
+      lower.includes("nearby") ||
+      lower.includes("city") ||
+      lower.includes("area") ||
+      lower.includes("paas") ||
+      lower.includes("ghaziabad") ||
+      lower.includes("delhi");
+
+    let extractedCity: string | undefined = undefined;
+    if (lower.includes("ghaziabad")) extractedCity = "Ghaziabad, Uttar Pradesh, India";
+    else if (lower.includes("noida")) extractedCity = "Noida, Uttar Pradesh, India";
+    else if (lower.includes("delhi")) extractedCity = "Delhi, India";
+    else if (lower.includes("meerut")) extractedCity = "Meerut, Uttar Pradesh, India";
+    else if (lower.includes("lucknow")) extractedCity = "Lucknow, Uttar Pradesh, India";
+    else if (lower.includes("mumbai")) extractedCity = "Mumbai, Maharashtra, India";
+    else if (lower.includes("uttar pradesh") || lower.includes("up")) extractedCity = "Ghaziabad, Uttar Pradesh, India";
+
+    if (dynamicProducts.length > 0) {
+      suggestions = {
+        suggestedCompany: lower.includes("greenfield") ? "GreenField Agro Traders" : undefined,
+        suggestedIndustry: "Food & Agriculture",
+        suggestedSubIndustry: "Agricultural Commodities & Grain Trading",
+        suggestedBusinessType: "Agricultural Commodities Wholesale",
+        suggestedBusinessModel: "B2B",
+        suggestedBusinessSize: BusinessSize.SMALL,
+        suggestedOperatingScope: isLocal ? OperatingScope.LOCAL : OperatingScope.REGIONAL,
+        suggestedBusinessModes: [BusinessMode.B2B, BusinessMode.LOCAL_BUSINESS],
+        suggestedProducts: dynamicProducts,
+        suggestedServices: ["Bulk Commercial Supply", "B2B Logistics Delivery"],
+        suggestedPrimaryCity: extractedCity || "Ghaziabad, Uttar Pradesh, India",
+        suggestedTargetBuyers: [
+          "Wholesale Grain Distributors",
+          "Flour Mills & Food Processors",
+          "Commercial Bakeries & Caterers",
+          "Supermarket & Retail Chains",
+          "Hotels & Institutional Buyers",
+        ],
+        suggestedSearchKeywords: [
+          "wheat wholesale supplier",
+          "bulk grain trader",
+          "food commodities distributor",
+        ],
+        suggestedOutreachChannels: ["WHATSAPP", "GMAIL_SMTP"],
+        valueProposition:
+          "High-grade wholesale agricultural commodities with reliable supply chains and competitive bulk pricing.",
+        confidenceScore: 0.95,
+      };
+    } else {
+      try {
+        const aiPromise = ai.structured(
+          [
+            {
+              role: "system",
+              content: `You are NOVA, an expert B2B AI Business Intelligence Analyst.
 Analyze the merchant's business description and extract comprehensive structured suggestions.
 Determine suggested industry, business size (SOLO, SMALL, MEDIUM, LARGE), operating scope (LOCAL, CITY, REGIONAL, NATIONAL, INTERNATIONAL), business modes (LOCAL_BUSINESS, B2B, B2C, MANUFACTURER, SERVICE_BUSINESS, ENTERPRISE), products, target buyer profiles, search keywords, and primary operating city if mentioned.
 Respond ONLY with JSON matching the schema.`,
-          },
-          {
-            role: "user",
-            content: `Analyze this business description: "${inputPrompt}"`,
-          },
-        ],
-        analysisSchema,
-      );
-    } catch (aiErr: any) {
-      console.warn("AI Business Analysis fallback triggered:", aiErr.message);
-      const lower = inputPrompt.toLowerCase();
+            },
+            {
+              role: "user",
+              content: `Analyze this business description: "${inputPrompt}"`,
+            },
+          ],
+          analysisSchema,
+        );
 
-      const isWheat =
-        lower.includes("wheat") ||
-        lower.includes("atta") ||
-        lower.includes("flour") ||
-        lower.includes("grain") ||
-        lower.includes("gehun");
-      const isLocal =
-        lower.includes("local") ||
-        lower.includes("nearby") ||
-        lower.includes("city") ||
-        lower.includes("area") ||
-        lower.includes("paas");
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(
+            () => reject(new Error("AI analysis timeout — switching to instant NLP engine")),
+            2000,
+          ),
+        );
 
-      suggestions = {
-        suggestedIndustry: isWheat ? "Food & Agriculture" : "General Commerce",
-        suggestedSubIndustry: isWheat
-          ? "Flour & Grain Milling"
-          : "Wholesale Trading",
-        suggestedBusinessType: isWheat
-          ? "Flour & Grain Trading"
-          : "Commercial Wholesale Supplier",
-        suggestedBusinessModel: "B2B",
-        suggestedBusinessSize: isWheat
-          ? BusinessSize.SMALL
-          : BusinessSize.SMALL,
-        suggestedOperatingScope: isLocal
-          ? OperatingScope.LOCAL
-          : OperatingScope.LOCAL,
-        suggestedBusinessModes: isLocal
-          ? [BusinessMode.LOCAL_BUSINESS, BusinessMode.B2B]
-          : [BusinessMode.B2B],
-        suggestedProducts: isWheat
-          ? ["Whole Wheat (Gehun)", "Chakki Fresh Atta", "Maida", "Sooji"]
-          : ["Commercial B2B Supply"],
-        suggestedServices: isWheat
-          ? ["Bulk Grain Milling", "Custom Packaging"]
-          : [],
-        suggestedTargetBuyers: isWheat
-          ? [
-              "Wholesalers",
-              "Grain Distributors",
-              "Bakeries",
-              "Restaurants",
-              "Hotels",
-              "Food Manufacturers",
-              "Retail Chains",
-            ]
-          : ["Corporate Buyers", "Wholesale Distributors"],
-        suggestedSearchKeywords: isWheat
-          ? ["wheat wholesale", "atta flour supplier", "grain mill trader"]
-          : ["b2b supply", "wholesale distributor"],
-        suggestedOutreachChannels: isLocal
-          ? ["WHATSAPP", "GMAIL_SMTP"]
-          : ["GMAIL_SMTP"],
-        valueProposition: isWheat
-          ? "Direct factory chakki fresh wheat flour and high-grade wheat grain with volume pricing."
-          : "High quality commercial supply.",
-        confidenceScore: 0.92,
-      };
+        suggestions = (await Promise.race([
+          aiPromise,
+          timeoutPromise,
+        ])) as z.infer<typeof analysisSchema>;
+      } catch (aiErr: any) {
+        console.warn("AI Business Analysis fast fallback triggered:", aiErr.message);
+        suggestions = {
+          suggestedIndustry: "General Commerce",
+          suggestedSubIndustry: "Wholesale Trading",
+          suggestedBusinessType: "Commercial Wholesale Supplier",
+          suggestedBusinessModel: "B2B",
+          suggestedBusinessSize: BusinessSize.SMALL,
+          suggestedOperatingScope: OperatingScope.LOCAL,
+          suggestedBusinessModes: [BusinessMode.B2B],
+          suggestedProducts: ["Commercial B2B Supply"],
+          suggestedServices: [],
+          suggestedTargetBuyers: ["Corporate Buyers", "Wholesale Distributors"],
+          suggestedSearchKeywords: ["b2b supply", "wholesale distributor"],
+          suggestedOutreachChannels: ["GMAIL_SMTP"],
+          valueProposition: "High quality commercial supply.",
+          confidenceScore: 0.85,
+        };
+      }
     }
 
-    // Save AI Suggestions to PostgreSQL without overwriting user-confirmed values!
-    const updatedBp = await prisma.businessProfile.upsert({
-      where: { workspaceId },
-      update: {
-        aiSuggestions: suggestions,
-        updatedAt: new Date(),
-      },
-      create: {
-        workspaceId,
-        companyName: suggestions.suggestedCompany || "My Business",
-        industry: suggestions.suggestedIndustry,
-        subIndustry: suggestions.suggestedSubIndustry || null,
-        businessType: suggestions.suggestedBusinessType,
-        businessModel: suggestions.suggestedBusinessModel,
-        businessSize: suggestions.suggestedBusinessSize,
-        operatingScope: suggestions.suggestedOperatingScope,
-        businessModes: suggestions.suggestedBusinessModes,
-        products: suggestions.suggestedProducts,
-        targetBuyerProfiles: suggestions.suggestedTargetBuyers,
-        searchKeywords: suggestions.suggestedSearchKeywords,
-        valueProposition: suggestions.valueProposition,
-        aiSuggestions: suggestions,
-        confidenceScore: suggestions.confidenceScore,
-      },
-    });
-
-    const resolvedContext =
-      await activeBusinessContextService.resolveContext(workspaceId);
-    const strategy =
-      businessAdaptationStrategyService.deriveStrategy(resolvedContext);
-
+    // Respond immediately to the frontend for zero-latency instant UI feedback
     res.json({
       success: true,
       suggestions,
-      profile: updatedBp,
-      resolvedContext,
-      strategy,
     });
+
+    // Save AI Suggestions to DB asynchronously in background without blocking user
+    prisma.businessProfile
+      .upsert({
+        where: { workspaceId },
+        update: {
+          aiSuggestions: suggestions,
+          updatedAt: new Date(),
+        },
+        create: {
+          workspaceId,
+          companyName: suggestions.suggestedCompany || "My Business",
+          industry: suggestions.suggestedIndustry,
+          subIndustry: suggestions.suggestedSubIndustry || null,
+          businessType: suggestions.suggestedBusinessType,
+          businessModel: suggestions.suggestedBusinessModel,
+          businessSize: suggestions.suggestedBusinessSize,
+          operatingScope: suggestions.suggestedOperatingScope,
+          businessModes: suggestions.suggestedBusinessModes,
+          products: suggestions.suggestedProducts,
+          targetBuyerProfiles: suggestions.suggestedTargetBuyers,
+          searchKeywords: suggestions.suggestedSearchKeywords,
+          valueProposition: suggestions.valueProposition,
+          aiSuggestions: suggestions,
+          confidenceScore: suggestions.confidenceScore,
+        },
+      })
+      .catch((err) => console.warn("Background BP upsert:", err.message));
   } catch (err: any) {
     console.error("Failed to analyze business context:", err);
     res

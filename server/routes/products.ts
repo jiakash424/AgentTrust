@@ -280,4 +280,27 @@ router.put("/:id", requireAuth, async (req: any, res) => {
   }
 });
 
+// DELETE /api/products/:id - Delete product and related inventory items
+router.delete("/:id", requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const workspaceId = req.workspaceId;
+
+    // Delete inventory items first
+    await prisma.inventoryItem.deleteMany({
+      where: { productId: id, workspaceId },
+    }).catch(() => {});
+
+    // Delete product
+    await prisma.product.deleteMany({
+      where: { id, workspaceId },
+    });
+
+    res.json({ success: true, message: "Product deleted successfully" });
+  } catch (error: any) {
+    console.error("Failed to delete product:", error);
+    res.status(500).json({ error: error.message || "Failed to delete product" });
+  }
+});
+
 export default router;

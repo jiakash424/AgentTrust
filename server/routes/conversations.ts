@@ -271,6 +271,44 @@ router.delete("/:id", requireAuth, async (req: any, res) => {
   }
 });
 
+// 3.7. POST /api/conversations/:id/messages - Append a message to conversation
+router.post("/:id/messages", requireAuth, async (req: any, res) => {
+  try {
+    const { id } = req.params;
+    const workspaceId = req.workspaceId;
+    const { role, content, metadata } = req.body;
+
+    const conv = await prisma.conversation.findFirst({
+      where: { id, workspaceId },
+    });
+
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
+
+    const msg = await prisma.conversationMessage.create({
+      data: {
+        conversationId: id,
+        role: role || "user",
+        content: content || "",
+        metadata: metadata || {},
+      },
+    });
+
+    await prisma.conversation.update({
+      where: { id },
+      data: {
+        lastActivityAt: new Date(),
+        lastMessageAt: new Date(),
+        lastMessagePreview: (content || "").slice(0, 100),
+      },
+    });
+
+    res.status(201).json(msg);
+  } catch (err: any) {
+    console.error("Failed to append message:", err);
+    res.status(500).json({ error: "Failed to append message" });
+  }
+});
+
 // 4. POST /api/conversations/:id/reply - Receive Inbound / Simulated Buyer Reply
 router.post("/:id/reply", requireAuth, async (req: any, res) => {
   try {
@@ -320,11 +358,11 @@ router.post("/:id/reply", requireAuth, async (req: any, res) => {
 
     let analysis: z.infer<typeof analysisSchema>;
     try {
-      analysis = await ai.structured(
+      const aiPromise = ai.structured(
         [
           {
             role: "system",
-            content: `You are NOVA, an expert B2B sales negotiation agent. 
+            content: `You are NOVA, an expert senior B2B commercial sales negotiation agent. 
 Analyze the buyer's inbound reply. Extract buyer intent, product requested, quantity, proposed unit price, discount requests or objections. 
 Formulate a strategic counteroffer recommendation and draft a polite, professional sales response.
 IMPORTANT: You recommend a counteroffer for human review; you do NOT auto-send it.`,
@@ -338,23 +376,71 @@ Inbound Buyer Reply: "${messageText}"`,
         ],
         analysisSchema,
       );
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("AI negotiation timeout")), 3500),
+      );
+
+      analysis = (await Promise.race([aiPromise, timeoutPromise])) as any;
     } catch (aiErr: any) {
       console.warn(
-        "AI Negotiation Analysis fallback triggered:",
+        "AI Negotiation Analysis fast fallback triggered:",
         aiErr.message,
       );
-      // Fallback extraction
-      analysis = {
-        buyerIntent: "COMMERCIAL_NEGOTIATION",
-        interestedProduct: conv.deal?.productName || "B2B Goods",
-        quantity: 100,
-        proposedPrice: 11000,
-        objection: "Requested bulk discount / counteroffer",
-        urgency: "HIGH",
-        recommendedStrategy:
-          "Offer a 5% volume discount for orders over 100 units with standard delivery terms.",
-        draftResponse: `Thank you for your response! We can accommodate your volume order of 100 units. While our list price is slightly higher, we can offer a special partner rate of ₹11,200 per unit for immediate commitment.`,
-      };
+      
+      const targetProdName = conv.deal?.productName || conv.opportunity?.productName || "Basmati Rice";
+      const isAcceptance =
+        /\b(accept|approved?|deal|done|confirm|ok|agree|invoice|bhej do)\b/i.test(messageText);
+
+      let extractedQty = 100;
+      let extractedPrice = 5400;
+
+      const qtyMatch = messageText.match(/(\d+[\d,]*)\s*(?:units?|quintals?|qtls?|bags?|tons?|mts?|kg)/i);
+      if (qtyMatch) {
+        extractedQty = parseInt(qtyMatch[1].replace(/,/g, ""), 10);
+      }
+
+      const priceMatch =
+        messageText.match(/(?:₹|Rs\.?|INR|\bat\s+|\boffer\s+)\s*([\d,]+)/i) ||
+        messageText.match(/([\d,]+)\s*(?:\/|per|\s*each)\s*(?:unit|kg|qtl|quintal|ton|piece)/i);
+      if (priceMatch) {
+        extractedPrice = parseInt(priceMatch[1].replace(/,/g, ""), 10);
+      } else {
+        const allNums = (messageText.match(/\b\d[\d,]*\b/g) || []).map((n) =>
+          parseInt(n.replace(/,/g, ""), 10),
+        );
+        const largeNums = allNums.filter((n) => n !== extractedQty && n >= 500);
+        if (largeNums.length > 0) {
+          extractedPrice = largeNums[0];
+        }
+      }
+
+      if (isAcceptance) {
+        analysis = {
+          buyerIntent: "DEAL_CONFIRMATION_ACCEPTED",
+          interestedProduct: targetProdName,
+          quantity: extractedQty,
+          proposedPrice: extractedPrice,
+          objection: "None — Buyer accepted supply terms",
+          urgency: "HIGH",
+          recommendedStrategy:
+            "Buyer has agreed to commercial terms! Move deal to final closing and generate dispatch proforma invoice.",
+          draftResponse: `Thank you for your confirmation! We are finalizing the proforma invoice and dispatch logistics for your ${targetProdName} order (${extractedQty} units). Our logistics team will share transit details shortly.`,
+        };
+      } else {
+        const counterRate = Math.round(extractedPrice * 1.03);
+        analysis = {
+          buyerIntent: "COMMERCIAL_PRICE_NEGOTIATION",
+          interestedProduct: targetProdName,
+          quantity: extractedQty,
+          proposedPrice: extractedPrice,
+          objection: `Buyer requested ₹${extractedPrice.toLocaleString("en-IN")} per unit for ${extractedQty} units`,
+          urgency: "HIGH",
+          recommendedStrategy:
+            `Counter at ₹${counterRate.toLocaleString("en-IN")} per unit for immediate test shipment of ${extractedQty} units, or accept ₹${extractedPrice.toLocaleString("en-IN")} for recurring commitments exceeding 250 units.`,
+          draftResponse: `Thank you for your response! Regarding ${targetProdName}, we can accommodate your requirement of ${extractedQty} units. While our baseline is slightly higher, we can offer a special partner rate of ₹${counterRate.toLocaleString("en-IN")} per unit for immediate dispatch, or ₹${extractedPrice.toLocaleString("en-IN")} for a 3-month recurring contract. Would you like to proceed with the trial consignment?`,
+        };
+      }
     }
 
     // 3. Move linked Deal to NEGOTIATING stage automatically

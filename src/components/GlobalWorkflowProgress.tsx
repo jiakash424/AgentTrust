@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Sparkles,
@@ -13,23 +13,31 @@ import { useNavigate, useLocation } from "react-router";
 import { Button } from "./ui";
 
 export function GlobalWorkflowProgress() {
-  const { workflowStatus, activeStatus, qualifiedCount, clearWorkflowState } =
-    useWorkflow();
+  const { workflowStatus, activeStatus, qualifiedCount } = useWorkflow();
   const navigate = useNavigate();
   const location = useLocation();
+  const [dismissed, setDismissed] = useState(false);
 
-  // Auto-dismiss completed toast after 8 seconds
+  // Reset dismissed state whenever a new workflow starts running
   useEffect(() => {
-    if (workflowStatus === "COMPLETED") {
+    if (workflowStatus === "RUNNING") {
+      setDismissed(false);
+    } else if (workflowStatus === "COMPLETED") {
+      setDismissed(false);
       const timer = setTimeout(() => {
-        clearWorkflowState();
-      }, 8000);
+        setDismissed(true);
+      }, 7000);
       return () => clearTimeout(timer);
     }
-  }, [workflowStatus, clearWorkflowState]);
+  }, [workflowStatus]);
 
-  // Hide floating widget if user is currently on the Command Center page and running
-  if (workflowStatus === "IDLE") return null;
+  // Hide floating toast when IDLE, or if dismissed
+  if (
+    workflowStatus === "IDLE" ||
+    dismissed
+  ) {
+    return null;
+  }
 
   const isAnalysis = qualifiedCount === 0;
 
@@ -79,8 +87,9 @@ export function GlobalWorkflowProgress() {
           </div>
 
           <button
-            onClick={clearWorkflowState}
+            onClick={() => setDismissed(true)}
             className="text-[var(--color-ink-faint)] hover:text-[var(--color-ink)] transition-colors p-1 cursor-pointer"
+            aria-label="Close notification"
           >
             <X size={16} />
           </button>
@@ -89,20 +98,18 @@ export function GlobalWorkflowProgress() {
         {/* Action Button */}
         <div className="flex items-center justify-end gap-2 pt-1 border-t border-[var(--color-line)]/60">
           {workflowStatus === "RUNNING" ? (
-            location.pathname !== "/app" && (
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => navigate("/app")}
-              >
-                View Live Progress <ArrowRight size={13} />
-              </Button>
-            )
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate("/app")}
+            >
+              View Live Progress <ArrowRight size={13} />
+            </Button>
           ) : isAnalysis ? (
             <Button
               size="sm"
               onClick={() => {
-                clearWorkflowState();
+                setDismissed(true);
                 navigate("/app");
               }}
             >
@@ -112,7 +119,7 @@ export function GlobalWorkflowProgress() {
             <Button
               size="sm"
               onClick={() => {
-                clearWorkflowState();
+                setDismissed(true);
                 navigate("/app/opportunities");
               }}
             >

@@ -172,7 +172,7 @@ export function NovaMessage({
         animate={{ opacity: 1, y: 0 }}
         className="flex justify-end"
       >
-        <div className="max-w-[80%] rounded-[var(--radius-md)] rounded-br-md bg-[var(--color-ink)] text-white px-4 py-3 text-[15px]">
+        <div className="max-w-[80%] rounded-[var(--radius-md)] rounded-br-sm bg-[var(--color-coral)] text-white px-4.5 py-3 text-[14.5px] font-medium leading-relaxed shadow-sm">
           {children}
         </div>
       </motion.div>

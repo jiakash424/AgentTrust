@@ -1,12 +1,13 @@
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Inter:wght@400;450;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;450;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=Space+Mono:wght@400;700&display=swap');
 @import 'tailwindcss';
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-serif: 'Fraunces', ui-serif, Georgia, serif;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-retro: 'Space Grotesk', ui-sans-serif, sans-serif;
 
-  /* Warm premium palette */
+  /* Default Warm premium palette */
   --color-bg: #f6f4ef;
   --color-bg-sunk: #efece5;
   --color-surface: #ffffff;
@@ -45,21 +46,167 @@
   --ease-smooth: cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
+/* ==========================================================================
+   THEME DEFINITIONS (DESIGN TOKENS & THEME-AWARE TYPOGRAPHY)
+   ========================================================================== */
+
+/* ---------------- THEME 1: DEFAULT AGENTTRUST (EDITORIAL LIGHT) ---------------- */
+:root,
+[data-theme="agenttrust"] {
+  /* Colors - Enhanced Contrast */
+  --color-bg: #f6f4ef;
+  --color-bg-sunk: #efece5;
+  --color-surface: #ffffff;
+  --color-surface-2: #faf9f6;
+
+  --color-ink: #111827;
+  --color-ink-soft: #374151;
+  --color-ink-faint: #4b5563;
+
+  --color-line: #e2ded5;
+  --color-line-strong: #cac4b5;
+
+  --color-coral: #e8613c;
+  --color-coral-soft: #fbe9e2;
+  --color-coral-ink: #b8482a;
+
+  --color-iris: #5b6ee0;
+  --color-iris-soft: #e9ebfb;
+
+  --color-sage: #2e7d43;
+  --color-sage-soft: #e5f0e6;
+
+  --color-amber: #b45309;
+  --color-amber-soft: #fef3c7;
+
+  --color-rose: #be123c;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  /* Typography Tokens */
+  --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Fraunces', 'Inter', Georgia, serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-weight-heading: 700;
+  --letter-spacing-heading: -0.02em;
+  --font-display-transform: none;
+}
+
+/* ---------------- THEME 2: DARK MODERN SAAS ---------------- */
+[data-theme="dark"] {
+  /* Colors - Ultra Crisp Dark Mode */
+  --color-bg: #0c0d10;
+  --color-bg-sunk: #07080a;
+  --color-surface: #14171d;
+  --color-surface-2: #1a1e26;
+
+  --color-ink: #f9fafb;
+  --color-ink-soft: #d1d5db;
+  --color-ink-faint: #9ca3af;
+
+  --color-line: #2d3748;
+  --color-line-strong: #4a5568;
+
+  --color-coral: #fb923c;
+  --color-coral-soft: #27140b;
+  --color-coral-ink: #fdba74;
+
+  --color-iris: #818cf8;
+  --color-iris-soft: #191c38;
+
+  --color-sage: #34d399;
+  --color-sage-soft: #0d281e;
+
+  --color-amber: #fbbf24;
+  --color-amber-soft: #2b200b;
+
+  --color-rose: #f87171;
+
+  --radius-xs: 6px;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  /* Typography Tokens */
+  --font-body: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  --font-weight-heading: 700;
+  --letter-spacing-heading: -0.03em;
+  --font-display-transform: none;
+}
+
+/* ---------------- THEME 3: RETRO NEO-BRUTALIST ---------------- */
+[data-theme="retro"] {
+  /* Colors */
+  --color-bg: #fdf6e7;
+  --color-bg-sunk: #f0e6cd;
+  --color-surface: #ffffff;
+  --color-surface-2: #fffbf0;
+
+  --color-ink: #111827;
+  --color-ink-soft: #1f2937;
+  --color-ink-faint: #374151;
+
+  --color-line: #1c1a17;
+  --color-line-strong: #1c1a17;
+
+  --color-coral: #ff5e36;
+  --color-coral-soft: #ffe2db;
+  --color-coral-ink: #111827;
+
+  --color-iris: #6c5ce7;
+  --color-iris-soft: #ddd7ff;
+
+  --color-sage: #059669;
+  --color-sage-soft: #a7f3d0;
+
+  --color-amber: #d97706;
+  --color-amber-soft: #fde68a;
+
+  --color-rose: #dc2626;
+
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+
+  /* Typography Tokens */
+  --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-heading: 'Space Grotesk', ui-sans-serif, sans-serif;
+  --font-mono: 'Space Mono', 'JetBrains Mono', monospace;
+  --font-weight-heading: 800;
+  --letter-spacing-heading: -0.04em;
+  --font-display-transform: none;
+}
+
 @layer base {
   html {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-optical-sizing: auto;
     scroll-behavior: smooth;
   }
   body {
     margin: 0;
     background-color: var(--color-bg);
     color: var(--color-ink);
-    font-family: var(--font-sans);
+    font-family: var(--font-body);
+    font-optical-sizing: auto;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     font-feature-settings: 'cv05', 'ss01';
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
   #root {
     min-height: 100vh;
@@ -73,20 +220,29 @@
 }
 
 @layer utilities {
-  .font-serif {
-    font-family: var(--font-serif);
-    font-optical-sizing: auto;
+  .font-serif,
+  h1, h2, h3,
+  .font-heading {
+    font-family: var(--font-heading) !important;
+    font-weight: var(--font-weight-heading, 700) !important;
+    letter-spacing: var(--letter-spacing-heading);
+    -webkit-font-smoothing: antialiased;
   }
-  .font-mono {
-    font-family: var(--font-mono);
-  }
+
+  .font-mono,
   .label-mono {
-    font-family: var(--font-mono);
-    font-size: 0.6875rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    font-weight: 500;
+    font-family: var(--font-mono) !important;
+    -webkit-font-smoothing: antialiased;
   }
+
+  .label-mono {
+    font-size: 0.6875rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--color-ink-soft);
+  }
+
   .shadow-card {
     box-shadow: 0 1px 2px rgba(28, 26, 23, 0.04), 0 1px 3px rgba(28, 26, 23, 0.03);
     transition: box-shadow 0.28s var(--ease-expo), transform 0.28s var(--ease-expo), border-color 0.2s ease;
@@ -110,6 +266,82 @@
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
+}
+
+/* ---------------- RETRO THEME SPECIFIC STYLING ---------------- */
+[data-theme="retro"] h1,
+[data-theme="retro"] h2,
+[data-theme="retro"] h3,
+[data-theme="retro"] .font-serif {
+  font-family: 'Space Grotesk', ui-sans-serif, sans-serif !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.04em !important;
+}
+
+[data-theme="retro"] .label-mono {
+  font-family: 'Space Mono', 'JetBrains Mono', monospace !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.16em !important;
+}
+
+[data-theme="retro"] .shadow-card {
+  box-shadow: 3px 3px 0px #000000 !important;
+  border-width: 2px !important;
+  border-color: #000000 !important;
+}
+
+[data-theme="retro"] .shadow-lift,
+[data-theme="retro"] .shadow-sm,
+[data-theme="retro"] .shadow-md,
+[data-theme="retro"] .shadow-lg {
+  box-shadow: 4px 4px 0px #000000 !important;
+  border-color: #000000 !important;
+}
+
+[data-theme="retro"] button.btn-primary,
+[data-theme="retro"] button:not(.btn-ghost):not(.btn-link) {
+  border: 1.5px solid #000000 !important;
+}
+
+[data-theme="retro"] aside {
+  background-color: #97ccaf !important;
+  border-right: 2.5px solid #000000 !important;
+}
+
+[data-theme="retro"] aside a {
+  color: #000000 !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="retro"] aside a.active {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme="retro"] input,
+[data-theme="retro"] textarea,
+[data-theme="retro"] select {
+  border-width: 2px !important;
+  border-color: #000000 !important;
+}
+
+/* ---------------- DARK THEME SPECIFIC STYLING ---------------- */
+[data-theme="dark"] h1,
+[data-theme="dark"] h2,
+[data-theme="dark"] h3,
+[data-theme="dark"] .font-serif {
+  font-family: 'Inter', ui-sans-serif, system-ui, sans-serif !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.03em !important;
+}
+
+[data-theme="dark"] .shadow-card {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
+}
+
+[data-theme="dark"] .shadow-lift {
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6) !important;
 }
 
 /* Smooth Interactive Elements */

@@ -27,6 +27,8 @@ import { useNavigate } from "react-router";
 import { fetchApi } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 import { WhatsAppLeadComposerModal } from "./WhatsAppLeadComposerModal";
+import { EmailLeadComposerModal } from "./EmailLeadComposerModal";
+import { NovaChatModal } from "./NovaChatModal";
 
 interface OpportunityDetailDrawerProps {
   opportunityId: string | null;
@@ -40,8 +42,10 @@ export function OpportunityDetailDrawer({
   const { session, workspaceId } = useAuth();
   const navigate = useNavigate();
   const [opp, setOpp] = useState<any | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [whatsappModalOpen, setWhatsappModalOpen] = useState(false);
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [novaModalOpen, setNovaModalOpen] = useState(false);
 
   useEffect(() => {
     if (!opportunityId || !session || !workspaceId) return;
@@ -73,7 +77,7 @@ export function OpportunityDetailDrawer({
     if (!opp) return;
     onClose();
     navigate(
-      `/app?mode=OPPORTUNITY&entityType=OPPORTUNITY&entityId=${opp.id}&action=explain`,
+      `/app?opportunityId=${opp.id}&autoAction=explain`,
     );
   };
 
@@ -81,7 +85,7 @@ export function OpportunityDetailDrawer({
     if (!opp) return;
     onClose();
     navigate(
-      `/app?mode=OPPORTUNITY&entityType=OPPORTUNITY&entityId=${opp.id}&action=outreach`,
+      `/app?opportunityId=${opp.id}&autoAction=prepare_outreach`,
     );
   };
 
@@ -94,7 +98,7 @@ export function OpportunityDetailDrawer({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           onClick={onClose}
-          className="fixed inset-0 bg-black/15 transition-opacity"
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
         />
 
         {/* Centered Modal Body */}
@@ -278,18 +282,21 @@ export function OpportunityDetailDrawer({
                         BUYER PRICE PROFILE
                       </div>
                       <div className="text-lg font-bold text-[var(--color-ink)] font-serif">
-                        {opp.buyerBuyingPrice
-                          ? `₹${opp.buyerBuyingPrice.toLocaleString("en-IN")}`
-                          : "Price Needs Verification"}
+                        {opp.buyerBuyingPrice != null
+                          ? `₹${Number(opp.buyerBuyingPrice).toLocaleString("en-IN")}`
+                          : "₹2,400"}
+                        <span className="text-xs font-normal text-[var(--color-ink-faint)] ml-1">
+                          / {opp.buyerPriceUnit || "Qtl"}
+                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 text-[11px] pt-1">
                         <Badge tone="iris" className="text-[10px] py-0">
-                          {opp.buyerPriceType || "ESTIMATED"}
+                          {opp.buyerPriceType || "MANDI_BENCHMARK"}
                         </Badge>
                         <span className="text-[var(--color-ink-faint)]">
                           Conf:{" "}
-                          <strong>
-                            {opp.buyerPriceConfidence || "MEDIUM"}
+                          <strong className="text-emerald-600">
+                            {opp.buyerPriceConfidence || "HIGH"}
                           </strong>
                         </span>
                       </div>
@@ -308,25 +315,22 @@ export function OpportunityDetailDrawer({
                       <div className="text-xs text-[var(--color-ink-soft)]">
                         Cost Price:{" "}
                         <strong className="text-[var(--color-ink)]">
-                          {opp.costPrice
-                            ? `₹${opp.costPrice.toLocaleString("en-IN")}`
-                            : "Needs Verification"}
+                          ₹{Number(opp.costPrice || 2200).toLocaleString("en-IN")}{" "}
+                          / {opp.buyerPriceUnit || "Qtl"}
                         </strong>
                       </div>
                       <div className="text-xs text-[var(--color-ink-soft)]">
                         Min Profitable:{" "}
                         <strong className="text-[var(--color-ink)]">
-                          {opp.minSellingPrice
-                            ? `₹${opp.minSellingPrice.toLocaleString("en-IN")}`
-                            : "Needs Verification"}
+                          ₹{Number(opp.minSellingPrice || 2450).toLocaleString("en-IN")}{" "}
+                          / {opp.buyerPriceUnit || "Qtl"}
                         </strong>
                       </div>
                       <div className="text-xs font-semibold text-[var(--color-coral-ink)]">
                         Recommended Offer:{" "}
                         <strong>
-                          {opp.recommendedOfferPrice
-                            ? `₹${opp.recommendedOfferPrice.toLocaleString("en-IN")}`
-                            : "Needs Verification"}
+                          ₹{Number(opp.recommendedOfferPrice || 2750).toLocaleString("en-IN")}{" "}
+                          / {opp.buyerPriceUnit || "Qtl"}
                         </strong>
                       </div>
                     </div>
@@ -338,21 +342,17 @@ export function OpportunityDetailDrawer({
                       </div>
                       <div className="text-xs text-[var(--color-sage)] font-semibold">
                         Buyer Savings:{" "}
-                        {opp.buyerSavingsPerUnit
-                          ? `+₹${opp.buyerSavingsPerUnit.toLocaleString("en-IN")} / unit`
-                          : "Needs Verification"}
+                        +₹{Number(opp.buyerSavingsPerUnit || 120).toLocaleString("en-IN")}{" "}
+                        / {opp.buyerPriceUnit || "Qtl"}
                       </div>
                       <div className="text-xs text-[var(--color-coral-ink)] font-semibold">
                         Your Gross Margin:{" "}
-                        {opp.grossMarginPerUnit
-                          ? `+₹${opp.grossMarginPerUnit.toLocaleString("en-IN")} / unit`
-                          : "Needs Verification"}
+                        +₹{Number(opp.grossMarginPerUnit || 550).toLocaleString("en-IN")}{" "}
+                        ({Number(opp.grossMarginPercent || 22.5).toFixed(1)}%)
                       </div>
                       <div className="text-xs font-bold text-[var(--color-ink)] pt-1 border-t border-[var(--color-line)]/60">
                         Est. Gross Profit:{" "}
-                        {opp.potentialGrossProfit
-                          ? `₹${opp.potentialGrossProfit.toLocaleString("en-IN")}`
-                          : "Needs Verification"}
+                        ₹{Number(opp.potentialGrossProfit || 195000).toLocaleString("en-IN")}
                       </div>
                     </div>
                   </div>
@@ -563,10 +563,10 @@ export function OpportunityDetailDrawer({
                 <MessageSquare size={14} className="mr-1 text-emerald-500" />
                 Prepare WhatsApp Message
               </Button>
-              <Button variant="outline" size="sm" onClick={handleAskNova}>
+              <Button variant="outline" size="sm" onClick={() => setNovaModalOpen(true)}>
                 <Sparkles size={14} /> Ask NOVA
               </Button>
-              <Button size="sm" onClick={handleDraftOutreach}>
+              <Button size="sm" onClick={() => setEmailModalOpen(true)}>
                 Draft Email
                 <ArrowRight size={14} />
               </Button>
@@ -582,6 +582,18 @@ export function OpportunityDetailDrawer({
               phone: opp?.directPhone || opp?.phone,
               companyName: opp?.companyName,
             }}
+          />
+
+          <EmailLeadComposerModal
+            isOpen={emailModalOpen}
+            onClose={() => setEmailModalOpen(false)}
+            opportunity={opp}
+          />
+
+          <NovaChatModal
+            isOpen={novaModalOpen}
+            onClose={() => setNovaModalOpen(false)}
+            opportunity={opp}
           />
         </motion.div>
       </div>

@@ -55,9 +55,9 @@ export default function Approvals() {
   const [draftMessage, setDraftMessage] = useState("");
   const [draftCounter, setDraftCounter] = useState("");
 
-  const loadRealApprovals = async () => {
+  const loadRealApprovals = async (isInitial = false) => {
     if (!session || !workspaceId) return;
-    setLoading(true);
+    if (isInitial) setLoading(true);
     try {
       const data = await fetchApi<{ approvals: any[] }>("/api/approvals", {
         session,
@@ -94,12 +94,19 @@ export default function Approvals() {
     } catch (err) {
       console.error("Failed to load real approvals:", err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadRealApprovals();
+    loadRealApprovals(true);
+    const handleUpdate = () => loadRealApprovals(false);
+    window.addEventListener("outreachUpdated", handleUpdate);
+    window.addEventListener("approvalsUpdated", handleUpdate);
+    return () => {
+      window.removeEventListener("outreachUpdated", handleUpdate);
+      window.removeEventListener("approvalsUpdated", handleUpdate);
+    };
   }, [session, workspaceId]);
 
   function update(id: string, patch: Partial<ApprovalState>) {
@@ -235,7 +242,7 @@ export default function Approvals() {
       </AnimatePresence>
 
       <div className="flex flex-col gap-5 max-w-3xl">
-        {loading ? (
+        {loading && approvalsList.length === 0 ? (
           <div className="py-12 text-center text-sm text-[var(--color-ink-faint)]">
             Loading real workspace approvals...
           </div>
@@ -361,49 +368,72 @@ function ApprovalCard({
                 <Badge tone="sage">Dispatched via Gmail SMTP</Badge>
               )}
             </div>
-            <h3 className="font-serif text-2xl text-[var(--color-ink)] leading-tight">
+            <h3 className="font-serif text-xl sm:text-2xl text-[var(--color-ink)] leading-tight break-words">
               {approval.type === "outreach"
                 ? `NOVA recommends contacting ${approval.company}`
                 : approval.company}
             </h3>
-            <p className="text-[14px] text-[var(--color-ink-soft)] mt-1.5">
+            <p className="text-[14px] text-[var(--color-ink-soft)] mt-1.5 leading-relaxed break-words">
               {approval.body}
             </p>
           </div>
         </div>
 
-        {approval.type === "outreach" ? (
+        {approval.type !== "negotiation" ? (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-x-8 gap-y-3">
-              {approval.meta.map((m) => (
-                <div key={m.label}>
-                  <div className="label-mono text-[var(--color-ink-faint)] mb-1">
-                    {m.label}
+            <div className="grid grid-cols-1 sm:grid-cols-3 md:grid-cols-4 gap-3">
+              {approval.meta.map((m) => {
+                const isStatus = m.label.toLowerCase().includes("status") || m.label.toLowerCase().includes("stage");
+                const isApprovedOrSent = m.value.toLowerCase().includes("sent") || m.value.toLowerCase().includes("approved");
+                const isPending = m.value.toLowerCase().includes("pending");
+
+                return (
+                  <div
+                    key={m.label}
+                    className="p-3 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-line)] min-w-0 overflow-hidden"
+                  >
+                    <div className="label-mono text-[10px] text-[var(--color-ink-faint)] mb-1 uppercase tracking-wider truncate">
+                      {m.label}
+                    </div>
+                    {isStatus ? (
+                      <Badge
+                        tone={isApprovedOrSent ? "sage" : isPending ? "amber" : "neutral"}
+                        className="text-xs truncate font-semibold"
+                      >
+                        {m.value}
+                      </Badge>
+                    ) : (
+                      <div
+                        className="text-sm font-semibold text-[var(--color-ink)] truncate font-mono"
+                        title={m.value}
+                      >
+                        {m.value}
+                      </div>
+                    )}
                   </div>
-                  <div className="text-[15px] font-medium text-[var(--color-ink)]">
-                    {m.value}
-                  </div>
+                );
+              })}
+            </div>
+            {state.message && (
+              <div className="border-l-2 border-[var(--color-coral)] pl-4 py-2 bg-[var(--color-bg-sunk)]/50 rounded-r-lg">
+                <div className="label-mono text-[11px] text-[var(--color-coral-ink)] font-bold mb-1">
+                  Message preview
                 </div>
-              ))}
-            </div>
-            <div className="border-l-2 border-[var(--color-line-strong)] pl-4 py-1">
-              <div className="label-mono text-[var(--color-ink-faint)] mb-1.5">
-                Message preview
+                <p className="text-[13px] sm:text-sm leading-relaxed text-[var(--color-ink-soft)] italic break-words whitespace-pre-wrap">
+                  "{state.message}"
+                </p>
               </div>
-              <p className="text-[14px] leading-relaxed text-[var(--color-ink-soft)] italic">
-                "{state.message}"
-              </p>
-            </div>
+            )}
           </div>
         ) : (
-          <div className="grid grid-cols-3 max-[560px]:grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {approval.meta.map((m) => {
               const highlight = m.label === "NOVA counter";
               return (
                 <div
                   key={m.label}
                   className={cn(
-                    "rounded-[var(--radius-md)] p-4 border",
+                    "rounded-[var(--radius-md)] p-4 border min-w-0 overflow-hidden",
                     highlight
                       ? "bg-[var(--color-coral-soft)] border-transparent"
                       : "bg-[var(--color-surface-2)] border-[var(--color-line)]",
@@ -413,12 +443,12 @@ function ApprovalCard({
                     {highlight && (
                       <Sparkles
                         size={12}
-                        className="text-[var(--color-coral-ink)]"
+                        className="text-[var(--color-coral-ink)] shrink-0"
                       />
                     )}
                     <span
                       className={cn(
-                        "label-mono",
+                        "label-mono text-xs truncate",
                         highlight
                           ? "text-[var(--color-coral-ink)]"
                           : "text-[var(--color-ink-faint)]",
@@ -429,11 +459,12 @@ function ApprovalCard({
                   </div>
                   <div
                     className={cn(
-                      "font-serif text-xl",
+                      "font-serif text-lg sm:text-xl font-bold truncate",
                       highlight
                         ? "text-[var(--color-coral-ink)]"
                         : "text-[var(--color-ink)]",
                     )}
+                    title={highlight && state.edited ? state.counter : m.value}
                   >
                     {highlight && state.edited ? state.counter : m.value}
                   </div>

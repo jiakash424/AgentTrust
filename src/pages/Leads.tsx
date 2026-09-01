@@ -225,34 +225,46 @@ export default function Leads() {
     setLoadingLeads(true);
     setLeadsError(null);
     try {
-      const rawData = await fetchApi<any[]>("/api/leads", {
+      const rawData = await fetchApi<any>("/api/leads", {
         session,
         workspaceId,
       });
-      const mapped = rawData.map((l) => ({
-        id: l.id,
-        company: l.name,
-        website: l.website || "",
-        industry: l.industry || "Unknown",
-        location: l.location || "Unknown",
-        matchScore: l.matchScore || 0,
-        email: l.publicEmail || "",
-        potential:
-          l.matchScore > 85 ? "High" : l.matchScore > 70 ? "Medium" : "Low",
-        status:
-          l.status === "QUALIFIED"
-            ? "qualified"
-            : l.status === "RESEARCHING"
-              ? "researching"
-              : "new",
-        facts: [
-          {
-            type: "fact",
-            text: `Discovered via ${l.sources?.[0]?.sourceType || "AI Search"}`,
-          },
-          ...(l.description ? [{ type: "insight", text: l.description }] : []),
-        ],
-      }));
+      const leadsArray = Array.isArray(rawData)
+        ? rawData
+        : Array.isArray(rawData?.leads)
+          ? rawData.leads
+          : [];
+
+      const mapped = leadsArray.map((l: any) => {
+        const normStatus = (l.status || "NEW").toUpperCase();
+        return {
+          id: l.id,
+          company: l.name,
+          website: l.website || "",
+          industry: l.industry || "Food & Agriculture B2B",
+          location: l.location || "India",
+          matchScore: l.matchScore || 85,
+          email: l.publicEmail || "",
+          phone: l.phone || "",
+          potential:
+            (l.matchScore || 85) > 85 ? "High" : (l.matchScore || 85) > 70 ? "Medium" : "Low",
+          status:
+            normStatus === "QUALIFIED"
+              ? "qualified"
+              : normStatus === "RESEARCHING"
+                ? "researching"
+                : normStatus === "CONTACTED"
+                  ? "contacted"
+                  : "new",
+          facts: [
+            {
+              type: "fact",
+              text: `Discovered via ${l.sources?.[0]?.sourceType?.replace(/_/g, " ") || "AI Commercial Index"}`,
+            },
+            ...(l.description ? [{ type: "insight", text: l.description }] : []),
+          ],
+        };
+      });
       setRealLeads(mapped as Lead[]);
     } catch (err: any) {
       setLeadsError(err.message || "Failed to load leads");
@@ -485,7 +497,7 @@ export default function Leads() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={close}
-              className="fixed inset-0 bg-black/15 transition-opacity"
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
             />
 
             {/* Centered Modal Body */}

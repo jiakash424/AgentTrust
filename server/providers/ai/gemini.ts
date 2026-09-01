@@ -90,10 +90,13 @@ export class GeminiProvider implements AIProvider {
         }
 
         // Plain text response
-        const textContent = parts
-          .filter((p: any) => p.text)
-          .map((p: any) => p.text)
-          .join("");
+        const textContent =
+          (response as any).text ||
+          parts
+            .filter((p: any) => p.text)
+            .map((p: any) => p.text)
+            .join("") ||
+          "";
 
         return {
           role: "assistant",
@@ -120,6 +123,14 @@ export class GeminiProvider implements AIProvider {
           const { NvidiaNimProvider } = await import("./nvidia");
           const nvidia = new NvidiaNimProvider();
           return nvidia.chat(messages, tools);
+        } else if (
+          err.status === 404 ||
+          err.message?.includes("404") ||
+          err.message?.includes("not found")
+        ) {
+          console.warn(`[Gemini] Model ${this.model} not found. Falling back to gemini-2.5-flash-lite...`);
+          this.model = "gemini-2.5-flash-lite";
+          continue;
         } else if (
           err.status === 503 ||
           err.message?.includes("503") ||

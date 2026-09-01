@@ -8,24 +8,6 @@ const router = Router();
 router.get("/", requireAuth, async (req: any, res) => {
   try {
     const workspaceId = req.workspaceId;
-    const fifteenSecondsAgo = new Date(Date.now() - 15 * 1000);
-
-    // Auto-heal stale running workflows older than 15s
-    await prisma.aiWorkflow
-      .updateMany({
-        where: {
-          workspaceId,
-          status: "RUNNING",
-          createdAt: { lt: fifteenSecondsAgo },
-        },
-        data: {
-          status: "COMPLETED",
-          discoveredCount: 1,
-          qualifiedCount: 1,
-          completedAt: new Date(),
-        },
-      })
-      .catch(console.error);
 
     const [workflows, conversations] = await Promise.all([
       prisma.aiWorkflow.findMany({
@@ -146,13 +128,36 @@ router.get("/:workflowId", requireAuth, async (req: any, res) => {
     });
 
     if (workflow) {
+      let finalAnswer: string | null = null;
+
       const finalEvent = workflow.events?.find(
         (e: any) => e.type === "FINAL_ANSWER",
       );
-      const finalAnswer =
-        (finalEvent?.data as any)?.answer ||
-        workflow.events?.find((e: any) => e.type === "NOVA_COMPLETED")?.type ||
-        null;
+
+      if (finalEvent?.data) {
+        if (typeof finalEvent.data === "string") {
+          try {
+            const parsed = JSON.parse(finalEvent.data);
+            finalAnswer = parsed.answer || parsed.text || parsed.directAnswer || (typeof parsed === "string" ? parsed : null);
+          } catch {
+            finalAnswer = finalEvent.data;
+          }
+        } else if (typeof finalEvent.data === "object") {
+          const d = finalEvent.data as any;
+          finalAnswer = d.answer || d.text || d.directAnswer || null;
+        }
+      }
+
+      if (!finalAnswer) {
+        const completedEvt = workflow.events?.find(
+          (e: any) => e.type === "workflow_completed" || e.type === "NOVA_COMPLETED",
+        );
+        if (completedEvt?.data) {
+          const d = typeof completedEvt.data === "string" ? JSON.parse(completedEvt.data) : completedEvt.data;
+          finalAnswer = (d as any)?.finalAnswer || (d as any)?.answer || null;
+        }
+      }
+
       return res.json({
         ...workflow,
         finalAnswer,

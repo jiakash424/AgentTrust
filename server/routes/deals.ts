@@ -11,7 +11,7 @@ router.get("/", requireAuth, async (req: any, res) => {
   try {
     const workspaceId = req.workspaceId;
 
-    // Check if workspace has any deals; if not, backfill deals from existing verified opportunities
+    // Check if workspace has any deals; if not, quickly sync from verified opportunities
     const existingDealsCount = await prisma.deal.count({
       where: { workspaceId },
     });
@@ -19,35 +19,39 @@ router.get("/", requireAuth, async (req: any, res) => {
     if (existingDealsCount === 0) {
       const opportunities = await prisma.opportunity.findMany({
         where: { workspaceId },
-        take: 50,
+        take: 30,
       });
 
-      for (const opp of opportunities) {
-        const stage =
-          opp.verificationStatus === "VERIFIED" ? "QUALIFIED" : "RESEARCHING";
-        const estVal = opp.opportunityScore
-          ? opp.opportunityScore * 150
-          : 12000;
+      if (opportunities.length > 0) {
+        const dealsData = opportunities.map((opp) => {
+          const stage =
+            opp.verificationStatus === "VERIFIED" ? "QUALIFIED" : "RESEARCHING";
+          const estVal = opp.opportunityScore
+            ? opp.opportunityScore * 1500
+            : 120000;
+          const pName =
+            opp.productName ||
+            (opp.matchedProductNames && (opp.matchedProductNames as any)[0]) ||
+            "Chakki Fresh Atta";
+
+          return {
+            workspaceId,
+            opportunityId: opp.id,
+            title: `Deal - ${opp.companyName || opp.title}`,
+            companyName: opp.companyName || opp.title || "Qualified Buyer",
+            stage: stage,
+            productName: pName,
+            matchScore: opp.opportunityScore || 85,
+            estimatedQuantity: opp.estimatedQuantity || 100,
+            estimatedValue: estVal,
+            recommendedNextAction:
+              opp.recommendedNextAction || "Prepare personalized outreach",
+          };
+        });
 
         await prisma.deal
-          .create({
-            data: {
-              workspaceId,
-              opportunityId: opp.id,
-              title: `Deal - ${opp.companyName || opp.title}`,
-              companyName: opp.companyName || opp.title || "Qualified Buyer",
-              stage: stage,
-              productName:
-                opp.productName ||
-                (opp.matchedProductNames &&
-                  (opp.matchedProductNames as any)[0]) ||
-                "B2B Goods",
-              matchScore: opp.opportunityScore || opp.confidence || 85,
-              estimatedQuantity: 100,
-              estimatedValue: estVal,
-              recommendedNextAction:
-                opp.recommendedNextAction || "Prepare personalized outreach",
-            },
+          .createMany({
+            data: dealsData,
           })
           .catch(console.error);
       }

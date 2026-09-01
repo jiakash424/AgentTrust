@@ -71,9 +71,9 @@ export default function Dashboard() {
   }, []);
 
   // Fetch Live Business Data
-  const loadDashboardData = async () => {
+  const loadDashboardData = async (isInitial = false) => {
     if (!session || !workspaceId) return;
-    setLoading(true);
+    if (isInitial) setLoading(true);
     try {
       const [oppRes, prodRes, dealRes, bizRes] = await Promise.all([
         fetchApi<any>("/api/opportunities", { session, workspaceId }).catch(
@@ -114,7 +114,7 @@ export default function Dashboard() {
           product: targetProd,
           price: baseCost + 6.0,
           trend: "+4.1%",
-          date: "Today, 09:15 AM",
+          date: "Today, 07:15 AM",
           confidence: 91,
         },
         {
@@ -137,62 +137,69 @@ export default function Dashboard() {
     } catch (err) {
       console.error("Failed to load dashboard data:", err);
     } finally {
-      setLoading(false);
+      if (isInitial) setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDashboardData();
+    loadDashboardData(true);
+    const handleUpdate = () => loadDashboardData(false);
+    window.addEventListener("dealsUpdated", handleUpdate);
+    window.addEventListener("opportunitiesUpdated", handleUpdate);
+    window.addEventListener("productsUpdated", handleUpdate);
+    return () => {
+      window.removeEventListener("dealsUpdated", handleUpdate);
+      window.removeEventListener("opportunitiesUpdated", handleUpdate);
+      window.removeEventListener("productsUpdated", handleUpdate);
+    };
   }, [session, workspaceId]);
 
-  // Derived Calculations
+  // Derived Calculations from Real DB Workspace
   const primaryProduct = products[0] || {
-    name: "Whole Wheat flour",
-    units: 500,
-    unit: "kg",
-    costPrice: 30,
-    targetSellingPrice: 38,
+    name: "Products Catalog",
+    units: 0,
+    unit: "Unit",
+    costPrice: 0,
+    targetSellingPrice: 0,
   };
-  const totalStockUnits =
-    products.reduce((sum, p) => sum + (p.units || 0), 0) || 500;
-  const totalPipeline =
-    opportunities.reduce((sum, o) => sum + (o.potentialImpact || 45000), 0) +
-    deals.reduce((sum, d) => sum + (d.estimatedValue || 0), 0);
-  const highMatchOpps = opportunities.filter(
-    (o) => (o.opportunityScore || 0) >= 80,
+  const totalStockUnits = products.reduce(
+    (sum, p) => sum + (Number(p.units) || 0),
+    0,
   );
+  const totalPipeline =
+    opportunities.reduce(
+      (sum, o) =>
+        sum +
+        (Number(o.potentialImpact) ||
+          Number(o.potentialGrossProfit) ||
+          (Number(o.estimatedQuantity) || 100) *
+            (Number(o.recommendedOfferPrice) || 2800) ||
+          0),
+      0,
+    ) + deals.reduce((sum, d) => sum + (Number(d.estimatedValue) || 0), 0);
 
-  // Calendar Scheduled Events Mock Data
-  const scheduledTasks = [
-    {
-      day: new Date().getDate(),
-      title: "Muskan Bakery Sample Follow-up",
-      time: "11:30 AM",
-      type: "Call",
-      company: "Muskan Bakery",
-    },
-    {
-      day: new Date().getDate() + 1,
-      title: "Sankalp Restaurant Contract Discussion",
-      time: "03:00 PM",
-      type: "Visit",
-      company: "Sankalp Restaurant",
-    },
-    {
-      day: new Date().getDate() + 3,
-      title: "Weekly Mandi Price Review",
-      time: "10:00 AM",
-      type: "Pricing",
-      company: "Internal",
-    },
-    {
-      day: new Date().getDate() + 5,
-      title: "Delhi Wholesale Buyer Outreach Batch",
-      time: "02:00 PM",
-      type: "Outreach",
-      company: "NOVA Auto",
-    },
-  ];
+  const highMatchOpps = opportunities.filter(
+    (o) => (Number(o.opportunityScore) || 0) >= 80,
+  );
+  const verifiedCount = opportunities.filter(
+    (o) => o.verificationStatus === "VERIFIED" || o.phone || o.publicEmail,
+  ).length;
+
+  const workspaceCity =
+    businessContext?.primaryLocation?.city ||
+    businessContext?.city ||
+    opportunities[0]?.city ||
+    "Regional Market";
+
+  // Calendar Scheduled Events dynamically referencing real opportunities
+  const scheduledTasks =
+    opportunities.slice(0, 4).map((opp, idx) => ({
+      day: new Date().getDate() + idx,
+      title: `${opp.companyName} Commercial Follow-up`,
+      time: idx % 2 === 0 ? "11:30 AM" : "03:00 PM",
+      type: idx === 0 ? "Call" : idx === 1 ? "Proposal" : "Outreach",
+      company: opp.companyName,
+    })) || [];
 
   // Calendar calculations
   const daysInMonth = new Date(
@@ -294,18 +301,20 @@ export default function Dashboard() {
           </div>
           <div>
             <div className="font-serif text-3xl font-bold text-[var(--color-ink)]">
-              ₹{((totalPipeline || 184500) / 100000).toFixed(2)}L
+              {totalPipeline >= 100000
+                ? `₹${(totalPipeline / 100000).toFixed(2)}L`
+                : `₹${totalPipeline.toLocaleString("en-IN")}`}
             </div>
             <div className="text-xs text-emerald-600 font-semibold mt-1 flex items-center gap-1">
-              <TrendingUp size={13} /> +14.2% commercial demand growth
+              <TrendingUp size={13} /> Active Commercial Pipeline
             </div>
           </div>
           <div className="text-[11px] text-[var(--color-ink-soft)] pt-2 border-t border-[var(--color-line)] flex justify-between">
             <span>
-              Active Deals: <strong>{deals.length || 30}</strong>
+              Active Deals: <strong>{deals.length}</strong>
             </span>
             <span>
-              Opportunities: <strong>{opportunities.length || 55}</strong>
+              Opportunities: <strong>{opportunities.length}</strong>
             </span>
           </div>
         </Card>
@@ -321,7 +330,7 @@ export default function Dashboard() {
           </div>
           <div>
             <div className="font-serif text-3xl font-bold text-[var(--color-coral-ink)]">
-              {highMatchOpps.length || 18}{" "}
+              {highMatchOpps.length}{" "}
               <span className="text-base font-normal text-[var(--color-ink-soft)]">
                 Accounts
               </span>
@@ -332,10 +341,10 @@ export default function Dashboard() {
           </div>
           <div className="text-[11px] text-[var(--color-ink-soft)] pt-2 border-t border-[var(--color-line)] flex justify-between">
             <span>
-              Primary Focus: <strong>Ghaziabad / NCR</strong>
+              Primary Focus: <strong>{workspaceCity}</strong>
             </span>
             <span className="text-[var(--color-sage)] font-semibold">
-              2 Local Verified
+              {verifiedCount} Verified
             </span>
           </div>
         </Card>
@@ -351,22 +360,26 @@ export default function Dashboard() {
           </div>
           <div>
             <div className="font-serif text-3xl font-bold text-[var(--color-ink)]">
-              {totalStockUnits}{" "}
+              {totalStockUnits.toLocaleString("en-IN")}{" "}
               <span className="text-base font-normal text-[var(--color-ink-soft)]">
-                {primaryProduct.unit || "kg"}
+                {primaryProduct.unit || "Quintal"}
               </span>
             </div>
             <div className="text-xs text-[var(--color-ink-soft)] mt-1 truncate">
-              {primaryProduct.name} (Cost: ₹{primaryProduct.costPrice}/kg)
+              {primaryProduct.name} (Cost: ₹{primaryProduct.costPrice || 0}/
+              {primaryProduct.unit || "Quintal"})
             </div>
           </div>
           <div className="text-[11px] text-[var(--color-ink-soft)] pt-2 border-t border-[var(--color-line)] flex justify-between">
             <span>
               Target Price:{" "}
-              <strong>₹{primaryProduct.targetSellingPrice || 38}/kg</strong>
+              <strong>
+                ₹{primaryProduct.targetSellingPrice || 0}/
+                {primaryProduct.unit || "Quintal"}
+              </strong>
             </span>
             <span className="text-[var(--color-amber)] font-semibold">
-              Ready to move
+              {products.length} SKUs Listed
             </span>
           </div>
         </Card>
@@ -382,7 +395,7 @@ export default function Dashboard() {
           </div>
           <div>
             <div className="font-serif text-3xl font-bold text-[var(--color-sage)]">
-              100%
+              {products.length > 0 ? "100%" : "50%"}
             </div>
             <div className="text-xs text-[var(--color-sage)] font-semibold mt-1 flex items-center gap-1">
               <CheckCircle2 size={13} /> Machine buyer protocol ready
@@ -390,7 +403,7 @@ export default function Dashboard() {
           </div>
           <div className="text-[11px] text-[var(--color-ink-soft)] pt-2 border-t border-[var(--color-line)] flex justify-between">
             <span>
-              Catalog: <strong>Indexed</strong>
+              Catalog: <strong>{products.length} SKUs Indexed</strong>
             </span>
             <span>
               Policy: <strong>Active</strong>

@@ -84,6 +84,136 @@ router.post(
   },
 );
 
+// 1b. Unified Email Draft Generator for Leads & Opportunities
+router.post("/generate-draft", requireAuth, async (req: any, res) => {
+  try {
+    const workspaceId = req.workspaceId;
+    const {
+      opportunityId,
+      leadId,
+      companyName,
+      contactName,
+      email,
+      productName,
+    } = req.body;
+
+    let opp: any = null;
+    if (opportunityId) {
+      opp = await prisma.opportunity.findUnique({
+        where: { id: opportunityId },
+      });
+    }
+
+    const recipientComp =
+      companyName || opp?.companyName || opp?.title || "Valued Enterprise";
+    const recipientName =
+      contactName || opp?.contactName || recipientComp || "Procurement Manager";
+    const targetProd =
+      productName || opp?.productName || "wholesale commercial supply";
+    const targetEmail =
+      email || opp?.publicEmail || "procurement@commercial-enterprise.in";
+
+    const activeCtx =
+      await prisma.businessProfile.findUnique({ where: { workspaceId } });
+
+    const ai = getAIProvider();
+    const prompt = `You are NOVA, an executive B2B Sales Specialist.
+Company Profile: ${activeCtx?.companyName || "Commercial Supplier"} (${activeCtx?.industry || "Commerce"}).
+Target Recipient: ${recipientName} at ${recipientComp} (Email: ${targetEmail})
+Offered Commodity / Product: ${targetProd}
+Location: ${opp?.city || "India"}
+
+Generate a highly professional, concise, direct B2B proposal email.
+Rules:
+- High converting, respectful B2B tone.
+- Mention direct factory supply with volume commercial pricing.
+- Max 3 short paragraphs.
+- Subject line must be clean and compelling.
+
+Respond strictly with this JSON format:
+{
+  "subject": "The email subject",
+  "body": "The email body text",
+  "personalizationReason": "Short strategy note explaining why this email fits their procurement"
+}`;
+
+    let parsed = {
+      subject: `B2B Supply Proposal: Wholesale ${targetProd} for ${recipientComp}`,
+      body: `Dear ${recipientName},\n\nI am reaching out regarding bulk procurement of ${targetProd} for ${recipientComp}.\n\nWe provide certified commercial-grade ${targetProd} direct from source with transparent volume pricing and guaranteed logistics schedules.\n\nWould you be open to a brief discussion this week regarding your monthly procurement requirements?\n\nBest regards,\nSales & Commercial Sourcing Team`,
+      personalizationReason: `Tailored wholesale supply proposal for ${targetProd} based on verified market requirements.`,
+    };
+
+    try {
+      const message = await ai.chat([{ role: "user", content: prompt }]);
+      const completion = message.content || "";
+      const jsonStr = completion.substring(
+        completion.indexOf("{"),
+        completion.lastIndexOf("}") + 1,
+      );
+      const parsedAi = JSON.parse(jsonStr);
+      if (parsedAi.subject && parsedAi.body) {
+        parsed = parsedAi;
+      }
+    } catch (aiErr) {
+      console.warn("AI generation fallback used for email draft:", aiErr);
+    }
+
+    res.json({
+      success: true,
+      subject: parsed.subject,
+      body: parsed.body,
+      personalizationReason: parsed.personalizationReason,
+      recipientEmail: targetEmail,
+      recipientName,
+      companyName: recipientComp,
+    });
+  } catch (err: any) {
+    console.error("Failed to generate email draft:", err);
+    res.status(500).json({ error: "Failed to generate email draft" });
+  }
+});
+
+// 1c. Create / Submit Email Message
+router.post("/messages", requireAuth, async (req: any, res) => {
+  try {
+    const workspaceId = req.workspaceId;
+    const {
+      opportunityId,
+      leadId,
+      recipientEmail,
+      subject,
+      body,
+      personalizationReason,
+      submitForApproval,
+    } = req.body;
+
+    if (!subject || !body) {
+      return res
+        .status(400)
+        .json({ error: "Subject and body are required for email outreach." });
+    }
+
+    const status = submitForApproval ? "PENDING_APPROVAL" : "DRAFT";
+
+    const msg = await prisma.outreachMessage.create({
+      data: {
+        workspaceId,
+        opportunityId: opportunityId || null,
+        leadId: leadId || null,
+        subject,
+        body,
+        personalizationReason: personalizationReason || null,
+        status,
+      },
+    });
+
+    res.json({ success: true, message: msg });
+  } catch (err: any) {
+    console.error("Failed to create email message:", err);
+    res.status(500).json({ error: "Failed to create email message" });
+  }
+});
+
 // 2. Edit Draft
 router.post("/outreach/:id/edit", requireAuth, async (req: any, res) => {
   try {
@@ -470,21 +600,33 @@ router.get("/approvals", requireAuth, async (req: any, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    const waApprovals = waMessages.map((w) => ({
-      id: w.id,
-      company: `WhatsApp: ${w.recipientPhone}`,
-      type: "whatsapp_outreach",
-      status: w.status,
-      subject: `WhatsApp Message to ${w.recipientPhone}`,
-      body: w.content,
-      preview: w.content,
-      recommendation: `Approve and transmit WhatsApp message via official API`,
-      meta: [
-        { label: "Channel", value: "WhatsApp Business API" },
-        { label: "Recipient Phone", value: w.recipientPhone },
-        { label: "Status", value: w.status },
-      ],
-    }));
+    const waApprovals = waMessages.map((w) => {
+      let cleanPhone = w.recipientPhone || "Verified Account";
+      if (cleanPhone.length > 13) {
+        cleanPhone = cleanPhone.slice(-10);
+      }
+      if (cleanPhone.length === 10) {
+        cleanPhone = `+91 ${cleanPhone.slice(0, 5)} ${cleanPhone.slice(5)}`;
+      } else if (!cleanPhone.startsWith("+") && /^\d+$/.test(cleanPhone)) {
+        cleanPhone = `+${cleanPhone}`;
+      }
+
+      return {
+        id: w.id,
+        company: `WhatsApp: ${cleanPhone}`,
+        type: "whatsapp_outreach",
+        status: w.status,
+        subject: `WhatsApp Pitch to ${cleanPhone}`,
+        body: w.content,
+        preview: w.content,
+        recommendation: `Approve and transmit WhatsApp message via official API`,
+        meta: [
+          { label: "Channel", value: "WhatsApp Business API" },
+          { label: "Recipient Phone", value: cleanPhone },
+          { label: "Status", value: (w.status || "PENDING").replace(/_/g, " ") },
+        ],
+      };
+    });
 
     const emailApprovals = messages.map((m) => {
       const company =

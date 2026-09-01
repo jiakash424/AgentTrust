@@ -202,7 +202,19 @@ router.post("/messages", requireAuth, async (req: any, res) => {
       return;
     }
 
-    const cleanPhone = recipientPhone.replace(/\D/g, "");
+    // Extract first valid 10-12 digit phone number if multiple are provided
+    let cleanPhone = "";
+    const phoneParts = recipientPhone.split(/[,/|]/);
+    for (const part of phoneParts) {
+      const digits = part.replace(/\D/g, "");
+      if (digits.length >= 10 && digits.length <= 14) {
+        cleanPhone = digits.length === 10 ? `91${digits}` : digits;
+        break;
+      }
+    }
+    if (!cleanPhone) {
+      cleanPhone = recipientPhone.replace(/\D/g, "");
+    }
 
     // Opt-out check
     const optOut = await prisma.whatsAppOptOut.findUnique({
@@ -278,20 +290,29 @@ router.post("/messages/:id/approve", requireAuth, async (req: any, res) => {
       },
     });
 
-    // Update Deal or Opportunity Activity
+    // Update Deal or Opportunity Activity safely
     if (msg.leadId && sendRes.success) {
-      await prisma.dealActivity.create({
-        data: {
-          workspaceId,
-          leadId: msg.leadId,
-          title: "WhatsApp Message Transmitted",
-          type: "OUTREACH_SENT",
-          details: {
-            channel: "WHATSAPP",
-            providerMessageId: sendRes.providerMessageId,
-          },
-        },
-      });
+      try {
+        const leadExists = await prisma.lead.findUnique({
+          where: { id: msg.leadId },
+        });
+        if (leadExists) {
+          await prisma.dealActivity.create({
+            data: {
+              workspaceId,
+              leadId: msg.leadId,
+              title: "WhatsApp Message Transmitted",
+              type: "OUTREACH_SENT",
+              details: {
+                channel: "WHATSAPP",
+                providerMessageId: sendRes.providerMessageId,
+              },
+            },
+          });
+        }
+      } catch (actErr) {
+        console.warn("Could not create dealActivity:", actErr);
+      }
     }
 
     res.json({ success: true, message: updated, sendResponse: sendRes });

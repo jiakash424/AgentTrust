@@ -108,7 +108,8 @@ export function AgentThinkingConsole({
   events: HermesEventItem[];
   isThinking?: boolean;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  // Collapse by default so thinking is only shown when the user explicitly clicks to expand
+  const [collapsed, setCollapsed] = useState(true);
 
   if (events.length === 0 && !isThinking) return null;
 
